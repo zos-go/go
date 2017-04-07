@@ -1,0 +1,76 @@
+Prerequisite
+============
+This document aims to build a native compiler for z/OS platform. In order to do it, we need an existing Go compiler to build the Go source code. But we don't have a Go compiler for zOS yet. So we use a Go compiler for LinuxOne to cross build a compiler for zOS. Therefore, we need a LinuxOne machine and a zOS machine for the build.
+It's highly recommended to set up a NFS file system to mount to both LinuxOne and zOS machine with binary mode. Because the build needs to compile on LinuxOne and link on zOS with the same code, it's convenient to share the code by NFS.
+
+
+Install a Go release on a LinuxOne machine
+==========================================
+You can download a Go release for LinuxOne e.g. go1.8.linux-s390x.tar.gz from https://golang.org/dl/, and extract it to your workdir. Set your WORKDIR to a directory under your NFS file system.
+    cd $WORKDIR
+    tar xvfz go1.8.linux-s390x.tar.gz
+
+
+Build zOS toolchain on LinuxOne machine
+=======================================
+1. Clone dev.zos branch from Github in your sandbox directory:
+    git clone git@github.rtp.raleigh.ibm.com:linux-on-ibm-z/go.git go-zos (Todo: need to be updated with link to github server)
+    cd go-zos
+    git checkout master
+
+2. Set up environment variables. You may want to put these into a shell script that can be evaluated easily.
+    export GOROOT_BOOTSTRAP=$WORKDIR/go1.8.linux-s390x
+    export GOROOT=$WORKDIR/go-zos
+    export GOARCH=s390x
+    export GOHOSTARCH=s390x
+    export GOHOSTOS=linux
+    export GOOS=zos
+    export PATH=$GOROOT_BOOTSTRAP/bin:$GOROOT/pkg/tool/linux_$GOHOSTARCH:$PATH
+
+3. Run the following command on an LinuxOne host to build both the cross-compiler and the native compiler. The cross-compiler is built first, and it is used immediately to generate object of the native compiler. Goff object files of the native compiler will be generated in $GOROOT/bin/zos_s390x and $GOROOT/pkg/tool/zos_s390x directory.
+    cd $GOROOT/src && ./make.bash
+
+
+Link zOS toolchain on z/OS machine
+==================================
+Assuming your sandbox directory is nfsmounted with binary mode on the machine.
+
+1. Convert make.bash from UTF-8 to EBCDIC in $GOROOT/src directory.
+    export GOROOT=$WORKDIR/go-zos
+    cd $GOROOT/src
+    iconv -f UTF-8 -t IBM-1047 make.bash > makezos.bash
+
+2. Set up environment variables. You may want to put these into a shell script that can be evaluated easily.
+    export GOROOT=$WORKDIR/go-zos
+    export GOARCH=s390x
+    export GOHOSTARCH=s390x
+    export GOOS=zos
+    export GOHOSTOS=zos
+    export PATH=$GOROOT/bin/zos_s390x:$GOROOT/pkg/tool/zos_s390x:$PATH
+
+3. Run the following command on an zOS host to bind and create the native toolchain in $GOROOT/bin/zos_s390x and $GOROOT/pkg/tool/zos_s390x directory.
+    cd $GOROOT/src && ./makezos.bash --bind-tool
+
+
+Compile Go programs and test on z/OS
+====================================
+Once you have built the native compiler, log on to a z system with /sandbox access, and set up your environment variables like this:
+    export GOROOT=$WORKDIR/go-zos
+    export GOARCH=s390x
+    export GOOS=zos
+    export PATH=$GOROOT/pkg/tool/zos_$GOARCH:$GOROOT/bin/zos_$GOARCH:$PATH
+    export _BPXK_AUTOCVT=ON
+    export _CEE_RUNOPTS="FILETAG(AUTOCVT)"
+
+You should now be able to use the "go" and "gofmt" commands, as well as individual tools such as "compile", "pack" and "link". The quickest way to build and run helloworld is:
+    cd $GOROOT/test
+    go build helloworld.go
+    ./helloworld
+
+
+Limitation
+==========
+1. Go uses UTF8 code page. We stick to it on zOS platform. On the other hand, the default code page on zOS platform is EBCDIC. Namely, the strings from/to system are expected to be in EBCDIC. We added the conversion from EBCDIC to UTF8 and vice versa. But we still see some issues in the code page conversion somewhere.
+
+2. Other than elf format in Linux, zOS uses an object format named GOFF. We support the compiler to generate GOFF format object files, link and run it on zOS. But we don't support to read and dump from a GOFF format file. Namely, those dump tools such as nm, addr2line don't work on zOS yet.
+

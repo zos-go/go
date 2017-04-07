@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -14,7 +14,9 @@ import (
 	"go/printer"
 	"go/token"
 	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 )
@@ -215,6 +217,13 @@ func (p *Package) writeDefs() {
 		fmt.Fprintln(fc, "static void init(void) {")
 		fmt.Fprint(fc, init)
 		fmt.Fprintln(fc, "}")
+	}
+
+	// chwan - The C source files have to be in EBCDIC on z/OS
+	if goos == "zos" {
+		p.convertFileToEBCDIC(fm)
+		p.convertFileToEBCDIC(fgcc)
+		p.convertFileToEBCDIC(fgcch)
 	}
 }
 
@@ -517,6 +526,11 @@ func (p *Package) writeOutput(f *File, srcfile string) {
 
 	fgo1.Close()
 	fgcc.Close()
+
+	// chwan - the generated C source file has to be in EBCDIC on z/OS
+	if goos == "zos" {
+		p.convertFileToEBCDIC(fgcc)
+	}
 }
 
 // fixGo converts the internal Name.Go field into the name we should show
@@ -1108,6 +1122,23 @@ func (p *Package) gccgoSymbolPrefix() string {
 		prefix = "go"
 	}
 	return prefix + "." + p.PackageName
+}
+
+// chwan - function to convert a file from UTF-8 to EBCDIC
+func (p *Package) convertFileToEBCDIC(fgcc *os.File) {
+	var bout, berr bytes.Buffer
+	fgcc2 := creat(fgcc.Name() + "z")
+	cmd := exec.Command("iconv", "-t", "IBM-1047", "-f", "UTF-8", fgcc.Name())
+	cmd.Stdout = &bout
+	cmd.Stderr = &berr
+	cmd.Run()
+	if err := ioutil.WriteFile(fgcc2.Name(), bout.Bytes(), 0666); err != nil {
+		defer os.Remove(fgcc2.Name())
+		fatalf("%s", err)
+	}
+	fgcc2.Close()
+	os.Remove(fgcc.Name())
+	os.Rename(fgcc2.Name(), fgcc.Name())
 }
 
 // Call a function for each entry in an ast.FieldList, passing the

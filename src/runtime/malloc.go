@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -158,8 +158,15 @@ const (
 	// On Darwin/arm64, we cannot reserve more than ~5GB of virtual memory,
 	// but as most devices have less than 4GB of physical memory anyway, we
 	// try to be conservative here, and only ask for a 2GB heap.
-	_MHeapMap_TotalBits = (_64bit*sys.GoosWindows)*35 + (_64bit*(1-sys.GoosWindows)*(1-sys.GoosDarwin*sys.GoarchArm64))*39 + sys.GoosDarwin*sys.GoarchArm64*31 + (1-_64bit)*32
-	_MHeapMap_Bits      = _MHeapMap_TotalBits - _PageShift
+	// z/OS on zSystems is similarly constrained. System default MEMLIMIT is 2GB, but also need
+	// room for bitmap here, storage for sysAlloc, and other uses outside of Go, like LE itself.
+	// In order to satisfy all requirements, z/OS users will need to set MEMLIMIT to at least 6GB.
+	_MHeapMap_TotalBits = (_64bit*(1-sys.GoosWindows)*(1-sys.GoosDarwin*sys.GoarchArm64)*(1-sys.GoosZos*sys.GoarchS390x))*39 +
+		(_64bit*sys.GoosWindows)*35 +
+		(sys.GoosDarwin*sys.GoarchArm64)*31 +
+		(sys.GoosZos*sys.GoarchS390x)*32 +
+		(1-_64bit)*32
+	_MHeapMap_Bits = _MHeapMap_TotalBits - _PageShift
 
 	_MaxMem = uintptr(1<<_MHeapMap_TotalBits - 1)
 
@@ -281,6 +288,11 @@ func mallocinit() {
 			}
 		}
 	}
+	//println("mallocinit: sysReserve(64): p, pSize, Errno, ErrnoJr",
+	//	hex(p),
+	//	hex(pSize),
+	//	hex((uintptr)(Errno())),
+	//	hex((uintptr)(ErrnoJr())))
 
 	if p == 0 {
 		// On a 32-bit machine, we can't typically get away
@@ -339,6 +351,7 @@ func mallocinit() {
 		if p == 0 {
 			throw("runtime: cannot reserve arena virtual address space")
 		}
+		//println("mallocinit: sysReserve:", hex(p), "size:", hex(pSize))
 	}
 
 	// PageSize can be larger than OS definition of page size,

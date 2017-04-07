@@ -17,3 +17,4 @@ const GoosOpenbsd = 0
 const GoosPlan9 = 0
 const GoosSolaris = 0
 const GoosWindows = 0
+const GoosZos = 0

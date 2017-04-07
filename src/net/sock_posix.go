@@ -1,13 +1,14 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris windows
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris windows zos
 
 package net
 
 import (
 	"os"
+	"runtime"
 	"syscall"
 	"time"
 )
@@ -188,14 +189,19 @@ func (fd *netFD) listenDatagram(laddr sockaddr) error {
 			if err := setDefaultMulticastSockopts(fd.sysfd); err != nil {
 				return err
 			}
-			addr := *addr
-			switch fd.family {
-			case syscall.AF_INET:
-				addr.IP = IPv4zero
-			case syscall.AF_INET6:
-				addr.IP = IPv6unspecified
+			// Skip for z/OS.
+			// z/OS requires bind to class D address to allow
+			// for multiple listeners.
+			if runtime.GOOS != "zos" {
+				addr := *addr
+				switch fd.family {
+				case syscall.AF_INET:
+					addr.IP = IPv4zero
+				case syscall.AF_INET6:
+					addr.IP = IPv6unspecified
+				}
+				laddr = &addr
 			}
-			laddr = &addr
 		}
 	}
 	if lsa, err := laddr.sockaddr(fd.family); err != nil {

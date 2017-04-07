@@ -1,13 +1,17 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 // +build cgo
 
-// +build linux,amd64
+// +build linux,amd64 zos
 
 #include <errno.h>
 #include <stdint.h>
+// chwan -
+// HACK this macro is required for xlc. xlcdev does not need it
+#define __SUSV3_XSI
+// HACK end
 #include <sys/mman.h>
 
 void *

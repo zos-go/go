@@ -9,7 +9,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009-2016 The Go Authors.  All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -469,7 +469,9 @@ func relocsym(s *LSym) {
 
 				o = r.Xadd
 				if Iself {
-					if Thearch.Thechar == '6' || Thearch.Thechar == 'z' {
+					if Isgoff {
+						o = r.Add
+					} else if Thearch.Thechar == '6' || Thearch.Thechar == 'z' {
 						o = 0
 					}
 				} else if HEADTYPE == obj.Hdarwin {
@@ -529,7 +531,9 @@ func relocsym(s *LSym) {
 
 				o = r.Xadd
 				if Iself {
-					if Thearch.Thechar == '6' || Thearch.Thechar == 'z' {
+					if Isgoff {
+						o = Symaddr(rs) + r.Xadd - (Symaddr(s) + int64(r.Off))
+					} else if Thearch.Thechar == '6' || Thearch.Thechar == 'z' {
 						o = 0
 					}
 				} else if HEADTYPE == obj.Hdarwin {
@@ -616,6 +620,25 @@ func relocsym(s *LSym) {
 
 		case 8:
 			Ctxt.Arch.ByteOrder.PutUint64(s.P[off:], uint64(o))
+		// chwan -
+		case 16:
+			// This is the relocatable for setting up the z/OS XPLINK function descriptor
+			// (64-bit style)
+			if goos == "zos" &&
+				((strings.HasPrefix(r.Sym.Name, "_cgo_") &&
+					strings.Contains(r.Sym.Name, "_Cfunc_")) ||
+					r.Sym.Name == "x_cgo_thread_start" ||
+					r.Sym.Name == "x_cgo_sys_thread_create" ||
+					r.Sym.Name == "x_cgo_notify_runtime_init_done" ||
+					r.Sym.Name == "x_cgo_init" ||
+					r.Sym.Name == "x_cgo_malloc" ||
+					r.Sym.Name == "x_cgo_free") {
+				Ctxt.Arch.ByteOrder.PutUint64(s.P[off:], uint64(0))
+				Ctxt.Arch.ByteOrder.PutUint64(s.P[off+8:], uint64(o))
+			} else {
+				Ctxt.Cursym = s
+				Diag("bad reloc size %#x for %s", uint32(r.Siz), r.Sym.Name)
+			}
 		}
 	}
 }

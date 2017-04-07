@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -1756,6 +1756,18 @@ func (b *builder) moveOrCopyFile(a *action, dst, src string, perm os.FileMode, f
 
 // copyFile is like 'cp src dst'.
 func (b *builder) copyFile(a *action, dst, src string, perm os.FileMode, force bool) error {
+
+	// zOS cross compile will generate obj file so add .o to the dst file if appropriate
+	if goos == "zos" && runtime.GOOS != goos {
+		sbase := filepath.Base(src)
+		sext := filepath.Ext(src)
+		dext := filepath.Ext(dst)
+		force = true
+		if dext != ".o" && (sbase == "a.out" || sext == ".test") {
+			dst = dst + ".o"
+		}
+	}
+
 	if buildN || buildX {
 		b.showcmd("", "cp %s %s", src, dst)
 		if buildN {
@@ -1776,7 +1788,7 @@ func (b *builder) copyFile(a *action, dst, src string, perm os.FileMode, force b
 		if fi.IsDir() {
 			return fmt.Errorf("build output %q already exists and is a directory", dst)
 		}
-		if !force && fi.Mode().IsRegular() && !isObject(dst) {
+		if !force && fi.Mode().IsRegular() && !isObject(dst) && goos != "zos" {
 			return fmt.Errorf("build output %q already exists and is not an object file", dst)
 		}
 	}
@@ -1811,6 +1823,28 @@ func (b *builder) copyFile(a *action, dst, src string, perm os.FileMode, force b
 		return fmt.Errorf("copying %s to %s: %v", src, dst, err)
 	}
 	return nil
+}
+
+func (b *builder) convertUTF8File(p *Package, objdir string, src string, isS bool) string {
+	var bout, berr bytes.Buffer
+	var newsrc string
+
+	origsrc := mkAbs(p.Dir, src)
+	cmd := exec.Command("iconv", "-t", "IBM-1047", "-f", "UTF-8", origsrc)
+	cmd.Stdout = &bout
+	cmd.Stderr = &berr
+	cmd.Run()
+
+	if isS {
+		newsrc = objdir + src[:len(src)-1] + "s"
+	} else {
+		newsrc = objdir + src
+	}
+
+	if err := ioutil.WriteFile(newsrc, bout.Bytes(), 0666); err != nil {
+		fatalf("%s", err)
+	}
+	return newsrc
 }
 
 // Install the cgo export header file, if there is one.
@@ -2819,6 +2853,12 @@ func (tools gccgoToolchain) cc(b *builder, p *Package, objdir, ofile, cfile stri
 		defs = append(defs, "-fsplit-stack")
 	}
 	defs = tools.maybePIC(defs)
+	// chwan - HACK xlc does not like -Wall"
+	if goos == "zos" {
+		return b.run(p.Dir, p.ImportPath, nil, envList("CC", defaultCC), "-g",
+			"-I", objdir, "-I", inc, "-o", ofile, defs, "-c", cfile)
+	}
+	// HACK end
 	return b.run(p.Dir, p.ImportPath, nil, envList("CC", defaultCC), "-Wall", "-g",
 		"-I", objdir, "-I", inc, "-o", ofile, defs, "-c", cfile)
 }
@@ -2867,6 +2907,13 @@ func (b *builder) ccompile(p *Package, out string, flags []string, file string, 
 	return b.run(p.Dir, p.ImportPath, nil, compiler, flags, "-o", out, "-c", file)
 }
 
+// chwan -
+// xlccompile runs the given C or C++ compiler and creates an object from a single source file.
+// The only difference from ccompile is the mkAbs call. It has been done already.
+func (b *builder) xlccompile(p *Package, out string, flags []string, file string, compiler []string) error {
+	return b.run(p.Dir, p.ImportPath, nil, compiler, flags, "-o", out, "-c", file)
+}
+
 // gccld runs the gcc linker to create an executable from a set of object files.
 func (b *builder) gccld(p *Package, out string, flags []string, obj []string) error {
 	var cmd []string
@@ -2899,6 +2946,20 @@ func (b *builder) ccompilerCmd(envvar, defcmd, objdir string) []string {
 	compiler := envList(envvar, defcmd)
 	a := []string{compiler[0], "-I", objdir}
 	a = append(a, compiler[1:]...)
+
+	// chwan - GO on z/OS is currently only available in NORENT.
+	//         So the C parts should be NORENT as well.
+	//         The other clang options specified below are either
+	//         not supported or unnecessary.
+	if goos == "zos" {
+		a = append(a, "-qnorent")
+		a = append(a, "-qlanglvl=extended")
+		// HACK - xlc only knows -q64
+		a = append(a, "-q64")
+		// HACK end
+		//	a = append(a, "-m64")
+		return a
+	}
 
 	// Definitely want -fPIC but on Windows gcc complains
 	// "-fPIC ignored for target (all code is position independent)"
@@ -3155,10 +3216,47 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, cgofi
 		}
 	}
 
+	// chwan
+	// On z/OS the gcc_* C files and header files from runtime/cgo
+	// need to be converted to EBCDIC first.
+	// Do the C header files first.
+	if goos == "zos" && len(gccfiles) > 0 && len(p.HFiles) > 0 {
+		for _, file := range p.HFiles {
+			b.convertUTF8File(p, obj, file, false)
+		}
+	}
+
 	for _, file := range gccfiles {
 		ofile := obj + cgoRe.ReplaceAllString(file[:len(file)-1], "_") + "o"
-		if err := b.gcc(p, ofile, cflags, file); err != nil {
-			return nil, nil, err
+		// chwan -
+		// For z/OS, we use xlcdev to compile both C files and .S (suffix for
+		// code written in system assember which is z/OS HLASM in our case)
+		// files. These files are in UTF-8 as the rest of GO source files.
+		// So we need to convert them to EBCDIC first.
+		// The file naming convention is xxx_s390x_zos.S.
+		// chwan - xlcdev only recognizes .s as the extension for HLASM source.
+		//         We'll rename from .S to .s during EBCDIC convertion.
+		// xlcdev is an IBM development compiler.
+		// Contact kobiv@ca.ibm.com for more information.
+		if goos == "zos" {
+			xlcflags := cflags
+			_goarch_goos := "_" + goarch + "_" + goos
+			name, ext := fileExtSplit(file)
+			isS := ext == "S" && strings.HasSuffix(name, _goarch_goos)
+			newfile := b.convertUTF8File(p, obj, file, isS)
+			// chwan - -Wa,goff tells HLASM to honour long external symbols.
+			//         The default is the ancient 8-character all capital
+			//         symbols.
+			if isS {
+				xlcflags = append(xlcflags, "-Wa,goff")
+			}
+			if err := b.xlccompile(p, ofile, xlcflags, newfile, b.gccCmd(p.Dir)); err != nil {
+				return nil, nil, err
+			}
+		} else {
+			if err := b.gcc(p, ofile, cflags, file); err != nil {
+				return nil, nil, err
+			}
 		}
 		linkobj = append(linkobj, ofile)
 		outObj = append(outObj, ofile)
@@ -3183,6 +3281,19 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, pcCFLAGS, pcLDFLAGS, cgofi
 		}
 		linkobj = append(linkobj, ofile)
 		outObj = append(outObj, ofile)
+	}
+
+	// chwan -
+	// We are done for z/OS here. The z/OS GOFF object files produced
+	// so far will be collected in runtime/cgo.a which is a mixture of
+	// GO elf object files and z/OS GOFF object files. During the link
+	// stage of the application build, the GO elf object files will be
+	// converted to GOFF format and be lined with the z/OS native GOFF
+	// object files.
+	// The code below involves the linking with the gcc specific imported
+	// library.
+	if goos == "zos" {
+		return outGo, outObj, nil
 	}
 
 	linkobj = append(linkobj, p.SysoFiles...)

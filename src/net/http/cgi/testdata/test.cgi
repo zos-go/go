@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# Copyright 2011 The Go Authors. All rights reserved.
+# Copyright 2011-2016 The Go Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 #
@@ -8,7 +8,12 @@
 use strict;
 use Cwd;
 
-binmode STDOUT;
+if ($ENV{'_BPXK_AUTOCVT'} ne '') { # z/OS autoconversion
+    binmode STDOUT,"encoding(iso8859-1)";
+}
+else {
+    binmode STDOUT;
+}
 
 my $q = MiniCGI->new;
 my $params = $q->Vars;

@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors. All rights reserved.
+// Copyright 2011-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -41,6 +41,7 @@ var osDefaultInheritEnv = map[string][]string{
 	"openbsd": {"LD_LIBRARY_PATH"},
 	"solaris": {"LD_LIBRARY_PATH", "LD_LIBRARY_PATH_32", "LD_LIBRARY_PATH_64"},
 	"windows": {"SystemRoot", "COMSPEC", "PATHEXT", "WINDIR"},
+	"zos":     {"LIBPATH", "_BPXK_AUTOCVT", "_CEE_RUNOPTS", "_EDC_AUTOCVT_BINARY"},
 }
 
 // Handler runs an executable in a subprocess with a CGI environment.

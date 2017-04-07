@@ -7,7 +7,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2008 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009-2016 The Go Authors.  All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -409,7 +409,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 				pPre = p
 				wasSplit = true //need post part of split
 			}
-
 			if autosize != 0 {
 				q = obj.Appendp(ctxt, p)
 				q.As = AMOVD
@@ -1021,4 +1020,11 @@ var Links390x = obj.LinkArch{
 	Minlc:      2,
 	Ptrsize:    8,
 	Regsize:    8,
+}
+
+var XPLinkFunc = []string{
+	"_crt0",
+	"_rt0_s390x_zos",
+	"runtime.zosThreadEntry",
+	"runtime.sigtramp",
 }

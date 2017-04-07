@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors. All rights reserved.
+// Copyright 2015-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -41,7 +41,7 @@ func testableNetwork(network string) bool {
 		}
 	case "unixpacket":
 		switch runtime.GOOS {
-		case "android", "darwin", "nacl", "plan9", "windows":
+		case "android", "darwin", "nacl", "plan9", "windows", "zos":
 			fallthrough
 		case "freebsd": // FreeBSD 8 and below don't support unixpacket
 			return false

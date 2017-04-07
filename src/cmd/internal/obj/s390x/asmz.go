@@ -7,7 +7,7 @@
 //    Portions Copyright © 2004,2006 Bruce Ellis
 //    Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //    Revisions Copyright © 2000-2008 Lucent Technologies Inc. and others
-//    Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//    Portions Copyright © 2009-2016 The Go Authors.  All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,10 +30,13 @@
 package s390x
 
 import (
+	"bytes"
 	"cmd/internal/obj"
+	"encoding/binary"
 	"log"
 	"math"
 	"sort"
+	"strings"
 )
 
 // instruction layout.
@@ -385,6 +388,12 @@ type Oprang struct {
 	stop  []Optab
 }
 
+type PROLOG struct {
+	eyecatcher   uint64
+	offsettoPPA1 uint32
+	flag         uint32
+}
+
 var oprange [ALAST & obj.AMask]Oprang
 
 var xcmp [C_NCLASS][C_NCLASS]uint8
@@ -411,6 +420,19 @@ func spanz(ctxt *obj.Link, cursym *obj.LSym) {
 		}
 		changed = false
 		buffer = buffer[:0]
+		if obj.Getgoos() == "zos" {
+			for i := range XPLinkFunc {
+				if XPLinkFunc[i] == cursym.Name {
+					var prolog PROLOG
+					var bin_buf bytes.Buffer
+					prolog.eyecatcher = 0x00C300C500C500F1
+					binary.Write(&bin_buf, binary.BigEndian, &prolog)
+					buffer = bin_buf.Bytes()
+					break
+				}
+			}
+		}
+
 		ctxt.Cursym.R = make([]obj.Reloc, 0)
 		for p := cursym.Text; p != nil; p = p.Link {
 			pc := int64(len(buffer))
@@ -3014,8 +3036,12 @@ func asmout(ctxt *obj.Link, asm *[]byte) {
 	case 18: // br/bl r
 		switch oclass(&p.To) {
 		case C_REG:
+			r := uint32(p.From.Reg)
+			if r == 0 || r == REG_R12 { // don't use closure register as link register
+				r = uint32(REG_LR)
+			}
 			if p.As == ABL {
-				zRR(op_BASR, uint32(REG_LR), uint32(p.To.Reg), asm)
+				zRR(op_BASR, r, uint32(p.To.Reg), asm)
 			} else {
 				zRR(op_BCR, 0xF, uint32(p.To.Reg), asm)
 			}
@@ -3498,7 +3524,20 @@ func asmout(ctxt *obj.Link, asm *[]byte) {
 		i2 := regoff(ctxt, &p.From)
 		switch p.As {
 		case AMOVD:
-			if i2&1 != 0 {
+			// For loading a cgo called function pointer, we need to load the
+			// address of the 16-byte XPLINK function descriptor (the 64-bit version)
+			if obj.Getgoos() == "zos" &&
+				((strings.Contains(p.From.Sym.Name, "_cgo_") &&
+					strings.Contains(p.From.Sym.Name, "_Cfunc_")) ||
+					p.From.Sym.Name == "_cgo_thread_start" ||
+					p.From.Sym.Name == "_cgo_sys_thread_create" ||
+					p.From.Sym.Name == "_cgo_notify_runtime_init_done" ||
+					// chwan - for some reason adding _cgo_init here causes GO trouble
+					// p.From.Sym.Name == "_cgo_init" ||
+					p.From.Sym.Name == "_cgo_malloc" ||
+					p.From.Sym.Name == "_cgo_free") {
+				zRIL(b, op_LARL, uint32(p.To.Reg), uint32(d), asm)
+			} else if i2&1 != 0 {
 				zRIL(b, op_LARL, REGTMP, 0, asm)
 				zRXY(0, op_LG, uint32(p.To.Reg), REGTMP, 0, 1, asm)
 				i2 -= 1

@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009-2016 The Go Authors.  All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -35,6 +35,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -146,6 +148,7 @@ func Ldmain() {
 	}
 	os.Args = args
 
+	infile = args[len(os.Args)-1]
 	obj.Flagparse(usage)
 
 	startProfile()
@@ -167,7 +170,16 @@ func Ldmain() {
 	}
 
 	if outfile == "" {
-		outfile = "a.out"
+		if obj.Getgoos() == "zos" && runtime.GOOS != "zos" {
+			// If it's a cross-compile for zos, the output is GOFF file with .o suffix
+			ibase := filepath.Base(infile)
+			iext := filepath.Ext(infile)
+			outfile = infile[0:len(ibase)-len(iext)] + ".o"
+
+		} else {
+			outfile = "a.out"
+		}
+
 		if HEADTYPE == obj.Hwindows {
 			outfile += ".exe"
 		}

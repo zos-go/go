@@ -4,7 +4,7 @@
 
 // +build cgo
 
-// +build !android,linux
+// +build !android,linux zos
 
 #include <stdarg.h>
 #include <stdio.h>

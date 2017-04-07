@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors. All rights reserved.
+// Copyright 2009-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -83,6 +83,14 @@ var sysdir = func() *sysDir {
 			[]string{
 				"common",
 				"local",
+			},
+		}
+	case "zos":
+		return &sysDir{
+			"/etc",
+			[]string{
+				"hosts",
+				"services",
 			},
 		}
 	}
@@ -1065,6 +1073,8 @@ func TestChdirAndGetwd(t *testing.T) {
 			}
 			dirs = []string{d1, d2}
 		}
+	case "zos":
+		dirs = []string{"/", "/u"}
 	}
 	oldwd := Getenv("PWD")
 	for mode := 0; mode < 2; mode++ {

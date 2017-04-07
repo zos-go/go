@@ -1,8 +1,8 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2013-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris windows
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris windows zos
 
 package runtime
 
@@ -153,8 +153,8 @@ func net_runtime_pollWait(pd *pollDesc, mode int) int {
 	if err != 0 {
 		return err
 	}
-	// As for now only Solaris uses level-triggered IO.
-	if GOOS == "solaris" {
+	// As for now only Solaris and z/OS use level-triggered IO.
+	if GOOS == "solaris" || GOOS == "zos" {
 		netpollarm(pd, mode)
 	}
 	for !netpollblock(pd, int32(mode), false) {

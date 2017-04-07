@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,6 +6,7 @@ package main_test
 
 import (
 	"bytes"
+	"internal/ebcdic"
 	"flag"
 	"fmt"
 	"go/build"
@@ -2215,6 +2216,12 @@ func TestGoGenerateHandlesSimpleCommand(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.run("generate", "./testdata/generate/test1.go")
+	if runtime.GOOS == "zos" {
+		cvtStr := make([]byte, tg.stdout.Len())
+		tg.stdout.Read(cvtStr)
+		str, _ := ebcdic.Decode(cvtStr)
+		tg.stdout.Write([]byte(string(str)))
+	}
 	tg.grepStdout("Success", "go generate ./testdata/generate/test1.go generated wrong output")
 }
 
@@ -2226,6 +2233,12 @@ func TestGoGenerateHandlesCommandAlias(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.run("generate", "./testdata/generate/test2.go")
+	if runtime.GOOS == "zos" {
+		cvtStr := make([]byte, tg.stdout.Len())
+		tg.stdout.Read(cvtStr)
+		str, _ := ebcdic.Decode(cvtStr)
+		tg.stdout.Write([]byte(string(str)))
+	}
 	tg.grepStdout("Now is the time for all good men", "go generate ./testdata/generate/test2.go generated wrong output")
 }
 
@@ -2237,6 +2250,12 @@ func TestGoGenerateVariableSubstitution(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.run("generate", "./testdata/generate/test3.go")
+	if runtime.GOOS == "zos" {
+		cvtStr := make([]byte, tg.stdout.Len())
+		tg.stdout.Read(cvtStr)
+		str, _ := ebcdic.Decode(cvtStr)
+		tg.stdout.Write([]byte(string(str)))
+	}
 	tg.grepStdout(runtime.GOARCH+" test3.go:7 pabc xyzp/test3.go/123", "go generate ./testdata/generate/test3.go generated wrong output")
 }
 
@@ -2248,6 +2267,12 @@ func TestGoGenerateRunFlag(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.run("generate", "-run", "y.s", "./testdata/generate/test4.go")
+	if runtime.GOOS == "zos" {
+		cvtStr := make([]byte, tg.stdout.Len())
+		tg.stdout.Read(cvtStr)
+		str, _ := ebcdic.Decode(cvtStr)
+		tg.stdout.Write([]byte(string(str)))
+	}
 	tg.grepStdout("yes", "go generate -run yes ./testdata/generate/test4.go did not select yes")
 	tg.grepStdoutNot("no", "go generate -run yes ./testdata/generate/test4.go selected no")
 }
@@ -2262,6 +2287,12 @@ func TestGoGenerateEnv(t *testing.T) {
 	tg.parallel()
 	tg.tempFile("env.go", "package main\n\n//go:generate env")
 	tg.run("generate", tg.path("env.go"))
+	if runtime.GOOS == "zos" {
+		cvtStr := make([]byte, tg.stdout.Len())
+		tg.stdout.Read(cvtStr)
+		str, _ := ebcdic.Decode(cvtStr)
+		tg.stdout.Write([]byte(string(str)))
+	}
 	for _, v := range []string{"GOARCH", "GOOS", "GOFILE", "GOLINE", "GOPACKAGE", "DOLLAR"} {
 		tg.grepStdout("^"+v+"=", "go generate environment missing "+v)
 	}

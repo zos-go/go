@@ -1,4 +1,4 @@
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -24,7 +24,10 @@ package cgo
 // exports some incompatible libc functions. See golang.org/issue/12030.
 #cgo windows LDFLAGS: -lmsvcrt -lm -mthreads
 
-#cgo CFLAGS: -Wall -Werror
+// chwan -
+// HACK xlc does not like -Wall
+//#cgo CFLAGS: -Wall -Werror
+// HACK end
 
 #cgo solaris CPPFLAGS: -D_POSIX_PTHREAD_SEMANTICS
 

@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -21,6 +21,9 @@ func TestStackMem(t *testing.T) {
 		ArraySize      = 1024
 		RecursionDepth = 128
 	)
+	if GOOS == "zos" {
+		t.Skip("skipping stack test on zos")
+	}
 	if testing.Short() {
 		return
 	}

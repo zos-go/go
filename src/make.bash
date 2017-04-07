@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2009 The Go Authors. All rights reserved.
+# Copyright 2009-2016 The Go Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
@@ -103,6 +103,42 @@ if [ "$(uname -s)" == "GNU/kFreeBSD" ]; then
         export CGO_ENABLED=0
 fi
 
+# Bind GO and tools on z/OS 
+dobind() {
+        ls *.o > ofile.lst
+        var=`cat ofile.lst`
+        for i in $var; do
+                outfile=${i::-2}
+                xlc -q64 -Wl,reus=none -o $outfile $i
+        done
+}
+
+if [ "$(uname -s)" == "OS/390" ]; then
+	if [ "$1" = "--bind-tool" ]; then
+		echo "##### Binding Go and tools on target, $GOOS/$GOARCH."
+		pwd = $pwd
+		export GOROOT="$(cd .. && pwd)"
+		cd $GOROOT/bin/zos_s390x
+		dobind
+		cd $GOROOT/pkg/tool/zos_s390x	
+		dobind
+		cd $pwd
+		exit 0
+	elif [ "$1" = "--bind-bootstrap" ]; then
+		echo "##### Binding Go and tools on target, $GOOS/$GOARCH."
+		pwd = $pwd
+		export GOROOT="$(cd ../../go-$GOOS-$GOARCH-bootstrap && pwd)"
+		cd $GOROOT/bin/zos_s390x
+		dobind
+		cd $GOROOT/pkg/tool/zos_s390x
+		dobind
+		cd $GOROOT
+		mv bin/*_*/* bin
+		rmdir bin/*_*
+		exit 0
+	fi
+fi
+
 # Clean old generated file that will cause problems in the build.
 rm -f ./runtime/runtime_defs.go
 
@@ -126,7 +162,11 @@ rm -f cmd/dist/dist
 GOROOT="$GOROOT_BOOTSTRAP" GOOS="" GOARCH="" "$GOROOT_BOOTSTRAP/bin/go" build -o cmd/dist/dist ./cmd/dist
 
 # -e doesn't propagate out of eval, so check success by hand.
-eval $(./cmd/dist/dist env -p || echo FAIL=true)
+if [ "$(uname -s)" == "OS/390" ]; then
+	eval $(./cmd/dist/dist env -p | iconv -f UTF-8 -t IBM-1047 || echo FAIL=true)
+else
+	eval $(./cmd/dist/dist env -p || echo FAIL=true)
+fi
 if [ "$FAIL" = true ]; then
 	exit 1
 fi
@@ -153,7 +193,7 @@ fi
 mv cmd/dist/dist "$GOTOOLDIR"/dist
 echo
 
-if [ "$GOHOSTARCH" != "$GOARCH" -o "$GOHOSTOS" != "$GOOS" ]; then
+if [ "$GOHOSTARCH" != "$GOARCH" -o "$GOHOSTOS" != "$GOOS" ] && [ "$GOOS" != "zos" ]; then
 	echo "##### Building packages and commands for host, $GOHOSTOS/$GOHOSTARCH."
 	# CC_FOR_TARGET is recorded as the default compiler for the go tool. When building for the host, however,
 	# use the host compiler, CC, from `cmd/dist/dist env` instead.

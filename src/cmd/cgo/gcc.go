@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -1065,6 +1065,14 @@ func (p *Package) rewriteRef(f *File) {
 // during the initial build as defaultCC.
 // defaultCC is defined in zdefaultcc.go, written by cmd/dist.
 func (p *Package) gccBaseCmd() []string {
+	// chwan - HACK since the defaultcc was set to "xlc" in
+	//         src/cmd/dist/build.go we need to force to xlcdev
+	//	   for the cgo stage.
+	// xlcdev is an IBM development compiler.
+	// Contact kobiv@ca.ibm.com for more information.
+	if goos == "zos" {
+		return strings.Fields("xlcdev")
+	}
 	// Use $CC if set, since that's what the build uses.
 	if ret := strings.Fields(os.Getenv("CC")); len(ret) > 0 {
 		return ret
@@ -1100,7 +1108,8 @@ func gccTmp() string {
 // gccCmd returns the gcc command line to use for compiling
 // the input.
 func (p *Package) gccCmd() []string {
-	c := append(p.gccBaseCmd(),
+	var c []string
+	c = append(p.gccBaseCmd(),
 		"-w",          // no warnings
 		"-Wno-error",  // warnings are not errors
 		"-o"+gccTmp(), // write object to tmp
@@ -1109,23 +1118,54 @@ func (p *Package) gccCmd() []string {
 		"-xc",         // input language is C
 	)
 	if p.GccIsClang {
-		c = append(c,
-			"-ferror-limit=0",
-			// Apple clang version 1.7 (tags/Apple/clang-77) (based on LLVM 2.9svn)
-			// doesn't have -Wno-unneeded-internal-declaration, so we need yet another
-			// flag to disable the warning. Yes, really good diagnostics, clang.
-			"-Wno-unknown-warning-option",
-			"-Wno-unneeded-internal-declaration",
-			"-Wno-unused-function",
-			"-Qunused-arguments",
-			// Clang embeds prototypes for some builtin functions,
-			// like malloc and calloc, but all size_t parameters are
-			// incorrectly typed unsigned long. We work around that
-			// by disabling the builtin functions (this is safe as
-			// it won't affect the actual compilation of the C code).
-			// See: https://golang.org/issue/6506.
-			"-fno-builtin",
-		)
+		// chwan - we are using xlcdev on z/OS so it is clang.
+		//         But xlcdev does not support all the options here
+		if goos != "zos" {
+			c = append(c,
+				"-ferror-limit=0",
+				// Apple clang version 1.7 (tags/Apple/clang-77) (based on LLVM 2.9svn)
+				// doesn't have -Wno-unneeded-internal-declaration, so we need yet another
+				// flag to disable the warning. Yes, really good diagnostics, clang.
+				"-Wno-unknown-warning-option",
+				"-Wno-unneeded-internal-declaration",
+				"-Wno-unused-function",
+				"-Qunused-arguments",
+				// Clang embeds prototypes for some builtin functions,
+				// like malloc and calloc, but all size_t parameters are
+				// incorrectly typed unsigned long. We work around that
+				// by disabling the builtin functions (this is safe as
+				// it won't affect the actual compilation of the C code).
+				// See: https://golang.org/issue/6506.
+				"-fno-builtin",
+			)
+		} else {
+			// chwan - only xlcdev supports the semantics of -Wno-error
+			//         i.e. just issue diagnostic message but not cause
+			//         termination of the compile due to errors.
+			c = append(p.gccBaseCmd(),
+				"-Wno-error", // warnings are not errors
+				// On z/OS the dwarf data is in a side file.
+				// So this is equivalent to -o and -gdwarf-2 for our purpose
+				// which is to feed the .o that is in elf and contains dwarf
+				// back to cgo.
+				"-qdebug=file="+gccTmp(), // write dwarf to tmp
+				// chwan - Kludge warning
+				//         We need to tell xlcdev to generate .o otherwise
+				//         no debug sidefile will be generated. So we specify
+				//         the output object file to have the same name as
+				//         the the debug side file specified earlier. The
+				//         compiler will generate the object file first then the
+				//         CDA debug writer will overwrite it with dwarf data
+				//         in elf and UTF-8.
+				"-o "+gccTmp(), // write dwarf to tmp
+				"-c",           // do not link
+				"-xc",          // input language is C
+				"-ferror-limit=0",
+				"-Wno-unknown-warning-option",
+				"-Wno-unneeded-internal-declaration",
+				"-Wno-unused-function",
+			)
+		}
 	}
 
 	c = append(c, p.GccOptions...)

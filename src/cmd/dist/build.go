@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -74,6 +74,7 @@ var okgoos = []string{
 	"openbsd",
 	"plan9",
 	"windows",
+	"zos",
 }
 
 // find reports the first index of p in l[0:n], or else -1.
@@ -168,12 +169,25 @@ func xinit() {
 
 	b = os.Getenv("CC")
 	if b == "" {
-		// Use clang on OS X, because gcc is deprecated there.
-		// Xcode for OS X 10.9 Mavericks will ship a fake "gcc" binary that
-		// actually runs clang. We prepare different command
-		// lines for the two binaries, so it matters what we call it.
-		// See golang.org/issue/5822.
-		if defaultclang {
+		// chwan - xlcdev on z/OS
+		//         at the time of this writing xlcdev on z/OS was
+		//         still under development. Certain things were missing, e.g. NORENT.
+		//         One may want to change this to "xlc" in order to
+		//         get NORENT. But that would cause a ripple of changes
+		//         elsewhere, e.g. cmd/cgo
+		// xlcdev is an IBM development compiler.
+		// Contact kobiv@ca.ibm.com for more information.
+		if goos == "zos" {
+			// HACK - the default is set to xlc for now.
+			b = "xlc"
+			//      b = "xlcdev"
+			// HACK end
+			// Use clang on OS X, because gcc is deprecated there.
+			// Xcode for OS X 10.9 Mavericks will ship a fake "gcc" binary that
+			// actually runs clang. We prepare different command
+			// lines for the two binaries, so it matters what we call it.
+			// See golang.org/issue/5822.
+		} else if defaultclang {
 			b = "clang"
 		} else {
 			b = "gcc"

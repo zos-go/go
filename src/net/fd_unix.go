@@ -1,8 +1,9 @@
-// Copyright 2009 The Go Authors. All rights reserved.
+// Copyright 2009-2016 The Go Authors. All rights reserved.
+
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris zos
 
 package net
 
@@ -246,7 +247,7 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 		n, err = syscall.Read(fd.sysfd, p)
 		if err != nil {
 			n = 0
-			if err == syscall.EAGAIN {
+			if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
 				if err = fd.pd.WaitRead(); err == nil {
 					continue
 				}
@@ -273,7 +274,7 @@ func (fd *netFD) readFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 		n, sa, err = syscall.Recvfrom(fd.sysfd, p, 0)
 		if err != nil {
 			n = 0
-			if err == syscall.EAGAIN {
+			if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
 				if err = fd.pd.WaitRead(); err == nil {
 					continue
 				}
@@ -300,7 +301,7 @@ func (fd *netFD) readMsg(p []byte, oob []byte) (n, oobn, flags int, sa syscall.S
 		n, oobn, flags, sa, err = syscall.Recvmsg(fd.sysfd, p, oob, 0)
 		if err != nil {
 			// TODO(dfc) should n and oobn be set to 0
-			if err == syscall.EAGAIN {
+			if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
 				if err = fd.pd.WaitRead(); err == nil {
 					continue
 				}
@@ -332,7 +333,7 @@ func (fd *netFD) Write(p []byte) (nn int, err error) {
 		if nn == len(p) {
 			break
 		}
-		if err == syscall.EAGAIN {
+		if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
 			if err = fd.pd.WaitWrite(); err == nil {
 				continue
 			}
@@ -361,7 +362,7 @@ func (fd *netFD) writeTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 	}
 	for {
 		err = syscall.Sendto(fd.sysfd, p, 0, sa)
-		if err == syscall.EAGAIN {
+		if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
 			if err = fd.pd.WaitWrite(); err == nil {
 				continue
 			}
@@ -387,7 +388,7 @@ func (fd *netFD) writeMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oob
 	}
 	for {
 		n, err = syscall.SendmsgN(fd.sysfd, p, oob, sa, 0)
-		if err == syscall.EAGAIN {
+		if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
 			if err = fd.pd.WaitWrite(); err == nil {
 				continue
 			}
@@ -422,7 +423,7 @@ func (fd *netFD) accept() (netfd *netFD, err error) {
 				return nil, err
 			}
 			switch nerr.Err {
-			case syscall.EAGAIN:
+			case syscall.EAGAIN, syscall.EWOULDBLOCK:
 				if err = fd.pd.WaitRead(); err == nil {
 					continue
 				}

@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -247,6 +247,21 @@ overwrite:
 			r.Add = rdint64(f)
 			rdint64(f) // Xadd, ignored
 			r.Sym = rdsym(ctxt, f, pkg)
+			// *chwan* Somehow the s.Size of 16 set in cmd/internal/obj/objfile.go
+			//         (p.From.Sym.Size) was lost.
+			if goos == "zos" &&
+				((strings.Contains(s.Name, "_cgo_") && strings.Contains(s.Name, "_Cfunc_") &&
+					strings.HasPrefix(r.Sym.Name, "_cgo_") && strings.Contains(r.Sym.Name, "_Cfunc_")) ||
+					(s.Name == "_cgo_thread_start" && r.Sym.Name == "x_cgo_thread_start") ||
+					(s.Name == "_cgo_sys_thread_create" && r.Sym.Name == "x_cgo_sys_thread_create") ||
+					(s.Name == "_cgo_notify_runtime_init_done" && r.Sym.Name == "x_cgo_notify_runtime_init_done") ||
+					(s.Name == "_cgo_init" && r.Sym.Name == "x_cgo_init") ||
+					(s.Name == "_cgo_malloc" && r.Sym.Name == "x_cgo_malloc") ||
+					(s.Name == "_cgo_free" && r.Sym.Name == "x_cgo_free")) {
+				if len(s.P) == 16 && int64(len(s.P)) > s.Size {
+					s.Size = int64(len(s.P))
+				}
+			}
 			rdsym(ctxt, f, pkg) // Xsym, ignored
 		}
 	}

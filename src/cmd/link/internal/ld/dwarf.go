@@ -1,4 +1,4 @@
-// Copyright 2010 The Go Authors. All rights reserved.
+// Copyright 2010-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -16,6 +16,7 @@ package ld
 
 import (
 	"cmd/internal/obj"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"strings"
@@ -111,6 +112,20 @@ func addrput(addr int64) {
 	}
 }
 
+func addrput2(addr int64, offset int64) {
+	if !writeToBuffer {
+		Diag("writeToBuffer is not set")
+	}
+
+	switch Thearch.Ptrsize {
+	case 4:
+		binary.BigEndian.PutUint32(outbuf[offset:], uint32(addr))
+
+	case 8:
+		binary.BigEndian.PutUint64(outbuf[offset:], uint64(addr))
+	}
+}
+
 func uleb128enc(v uint64, dst []byte) int {
 	var c uint8
 
@@ -170,6 +185,11 @@ func sleb128put(v int64) {
 	n := sleb128enc(v, encbuf[:])
 	Cwrite(encbuf[:n])
 }
+
+// z/OS: write dwarf section to a buffer
+var outbuf []byte
+var writeToBuffer bool
+var adjbuf bool
 
 /*
  * Defining Abbrevs.  This is hardcoded, and there will be
@@ -481,6 +501,7 @@ var abbrevs = [DW_NABRV]DWAbbrev{
 
 func writeabbrev() {
 	abbrevo = Cpos()
+
 	for i := 1; i < DW_NABRV; i++ {
 		// See section 7.5.3
 		uleb128put(int64(i))
@@ -497,6 +518,7 @@ func writeabbrev() {
 
 	Cput(0)
 	abbrevsize = Cpos() - abbrevo
+	dwarfaddzOSSection(".debug_abbrev", abbrevsize)
 }
 
 /*
@@ -670,11 +692,18 @@ func mustFind(die *DWDie, name string) *DWDie {
 	return r
 }
 
-func adddwarfrel(sec *LSym, sym *LSym, offsetbase int64, siz int, addend int64) {
+func adddwarfrel(sec *LSym, sym *LSym, offsetbase int64, siz int, addend int64, offset int64) {
+
 	r := Addrel(sec)
 	r.Sym = sym
 	r.Xsym = sym
-	r.Off = int32(Cpos() - offsetbase)
+
+	if adjbuf {
+		r.Off = int32(offset - offsetbase)
+	} else {
+		r.Off = int32(Cpos() - offsetbase)
+	}
+
 	r.Siz = uint8(siz)
 	r.Type = obj.R_ADDR
 	r.Add = addend
@@ -685,12 +714,21 @@ func adddwarfrel(sec *LSym, sym *LSym, offsetbase int64, siz int, addend int64) 
 	if HEADTYPE == obj.Hdarwin {
 		addend += sym.Value
 	}
+
 	switch siz {
 	case 4:
-		Thearch.Lput(uint32(addend))
+		if adjbuf {
+			binary.BigEndian.PutUint32(outbuf[offset:], uint32(addend))
+		} else {
+			Thearch.Lput(uint32(addend))
+		}
 
 	case 8:
-		Thearch.Vput(uint64(addend))
+		if adjbuf {
+			binary.BigEndian.PutUint64(outbuf[offset:], uint64(addend))
+		} else {
+			Thearch.Vput(uint64(addend))
+		}
 
 	default:
 		Diag("bad size in adddwarfrel")
@@ -707,11 +745,12 @@ func newrefattr(die *DWDie, attr uint16, ref *DWDie) *DWAttr {
 var fwdcount int
 
 func putattr(abbrev int, form int, cls int, value int64, data interface{}) {
+
 	switch form {
 	case DW_FORM_addr: // address
 		if Linkmode == LinkExternal {
 			value -= (data.(*LSym)).Value
-			adddwarfrel(infosec, data.(*LSym), infoo, Thearch.Ptrsize, value)
+			adddwarfrel(infosec, data.(*LSym), infoo, Thearch.Ptrsize, value, 0)
 			break
 		}
 
@@ -723,7 +762,7 @@ func putattr(abbrev int, form int, cls int, value int64, data interface{}) {
 			Cput(DW_OP_addr)
 			if Linkmode == LinkExternal {
 				value -= (data.(*LSym)).Value
-				adddwarfrel(infosec, data.(*LSym), infoo, Thearch.Ptrsize, value)
+				adddwarfrel(infosec, data.(*LSym), infoo, Thearch.Ptrsize, value, 0)
 				break
 			}
 
@@ -772,7 +811,7 @@ func putattr(abbrev int, form int, cls int, value int64, data interface{}) {
 
 	case DW_FORM_data4: // constant, {line,loclist,mac,rangelist}ptr
 		if Linkmode == LinkExternal && cls == DW_CLS_PTR {
-			adddwarfrel(infosec, linesym, infoo, 4, value)
+			adddwarfrel(infosec, linesym, infoo, 4, value, 0)
 			break
 		}
 
@@ -815,7 +854,7 @@ func putattr(abbrev int, form int, cls int, value int64, data interface{}) {
 				fwdcount++
 			}
 			if Linkmode == LinkExternal {
-				adddwarfrel(infosec, infosym, infoo, Thearch.Ptrsize, off)
+				adddwarfrel(infosec, infosym, infoo, Thearch.Ptrsize, off, 0)
 				break
 			}
 
@@ -1500,11 +1539,18 @@ func flushunit(dwinfo *DWDie, pc int64, pcsym *LSym, unitstart int64, header_len
 		Cput(DW_LNE_end_sequence)
 
 		here := Cpos()
-		Cseek(unitstart)
-		Thearch.Lput(uint32(here - unitstart - 4)) // unit_length
-		Thearch.Wput(2)                            // dwarf version
-		Thearch.Lput(uint32(header_length))        // header length starting here
-		Cseek(here)
+
+		if writeToBuffer {
+			binary.BigEndian.PutUint32(outbuf[unitstart:], uint32(here-unitstart-4))
+			binary.BigEndian.PutUint16(outbuf[unitstart+4:], 2)
+			binary.BigEndian.PutUint32(outbuf[unitstart+6:], uint32(header_length))
+		} else {
+			Cseek(unitstart)
+			Thearch.Lput(uint32(here - unitstart - 4)) // unit_length
+			Thearch.Wput(2)                            // dwarf version
+			Thearch.Lput(uint32(header_length))        // header length starting here
+			Cseek(here)
+		}
 	}
 }
 
@@ -1588,7 +1634,7 @@ func writelines() {
 	line := 1
 	file := 1
 	if Linkmode == LinkExternal {
-		adddwarfrel(linesec, s, lineo, Thearch.Ptrsize, 0)
+		adddwarfrel(linesec, s, lineo, Thearch.Ptrsize, 0, 0)
 	} else {
 		addrput(pc)
 	}
@@ -1709,6 +1755,7 @@ func writelines() {
 
 	flushunit(dwinfo, epc, epcs, unitstart, int32(headerend-unitstart-10))
 	linesize = Cpos() - lineo
+	dwarfaddzOSSection(".debug_line", linesize)
 }
 
 /*
@@ -1755,6 +1802,7 @@ func writeframes() {
 
 	Cput(DW_CFA_def_cfa)
 	uleb128put(int64(Thearch.Dwarfregsp)) // register SP (**ABI-dependent, defined in l.h)
+
 	if haslinkregister() {
 		uleb128put(int64(0)) // offset
 	} else {
@@ -1840,23 +1888,37 @@ func writeframes() {
 		fdesize += pad
 
 		// Emit the FDE header for real, Section 6.4.1.
-		Cseek(fdeo)
+		if writeToBuffer {
+			binary.BigEndian.PutUint32(outbuf[fdeo:], uint32(fdesize))
 
-		Thearch.Lput(uint32(fdesize))
-		if Linkmode == LinkExternal {
-			adddwarfrel(framesec, framesym, frameo, 4, 0)
-			adddwarfrel(framesec, s, frameo, Thearch.Ptrsize, 0)
+			if Linkmode == LinkExternal {
+				adjbuf = true
+				adddwarfrel(framesec, framesym, frameo, 4, 0, fdeo+4)
+				adddwarfrel(framesec, s, frameo, Thearch.Ptrsize, 0, fdeo+4+4)
+				adjbuf = false
+			}
+
+			addrput2(s.Size, fdeo+4+4+int64(Thearch.Ptrsize))
 		} else {
-			Thearch.Lput(0)
-			addrput(s.Value)
-		}
+			Cseek(fdeo)
+			Thearch.Lput(uint32(fdesize))
 
-		addrput(s.Size)
-		Cseek(fdeo + 4 + fdesize)
+			if Linkmode == LinkExternal {
+				adddwarfrel(framesec, framesym, frameo, 4, 0, 0)
+				adddwarfrel(framesec, s, frameo, Thearch.Ptrsize, 0, 0)
+			} else {
+				Thearch.Lput(0)
+				addrput(s.Value)
+			}
+
+			addrput(s.Size)
+			Cseek(fdeo + 4 + fdesize)
+		}
 	}
 
 	Cflush()
 	framesize = Cpos() - frameo
+	dwarfaddzOSSection(".debug_frame", framesize)
 }
 
 /*
@@ -1889,7 +1951,7 @@ func writeinfo() {
 
 		// debug_abbrev_offset (*)
 		if Linkmode == LinkExternal {
-			adddwarfrel(infosec, abbrevsym, infoo, 4, 0)
+			adddwarfrel(infosec, abbrevsym, infoo, 4, 0, 0)
 		} else {
 			Thearch.Lput(0)
 		}
@@ -1899,9 +1961,13 @@ func writeinfo() {
 		putdie(compunit)
 
 		here := Cpos()
-		Cseek(unitstart)
-		Thearch.Lput(uint32(here - unitstart - 4)) // exclude the length field.
-		Cseek(here)
+		if writeToBuffer {
+			binary.BigEndian.PutUint32(outbuf[unitstart:], uint32(here-unitstart-4))
+		} else {
+			Cseek(unitstart)
+			Thearch.Lput(uint32(here - unitstart - 4)) // exclude the length field.
+			Cseek(here)
+		}
 	}
 
 	Cflush()
@@ -1953,9 +2019,13 @@ func writepub(ispub func(*DWDie) bool) int64 {
 		Thearch.Lput(0)
 
 		here := Cpos()
-		Cseek(sectionstart)
-		Thearch.Lput(uint32(here - sectionstart - 4)) // exclude the length field.
-		Cseek(here)
+		if writeToBuffer {
+			binary.BigEndian.PutUint32(outbuf[sectionstart:], uint32(here-sectionstart-4))
+		} else {
+			Cseek(sectionstart)
+			Thearch.Lput(uint32(here - sectionstart - 4)) // exclude the length field.
+			Cseek(here)
+		}
 	}
 
 	return sectionstart
@@ -1987,7 +2057,7 @@ func writearanges() int64 {
 
 		value := compunit.offs - COMPUNITHEADERSIZE // debug_info_offset
 		if Linkmode == LinkExternal {
-			adddwarfrel(arangessec, infosym, sectionstart, 4, value)
+			adddwarfrel(arangessec, infosym, sectionstart, 4, value, 0)
 		} else {
 			Thearch.Lput(uint32(value))
 		}
@@ -1997,7 +2067,7 @@ func writearanges() int64 {
 		strnput("", headersize-(4+2+4+1+1)) // align to thearch.ptrsize
 
 		if Linkmode == LinkExternal {
-			adddwarfrel(arangessec, b.data.(*LSym), sectionstart, Thearch.Ptrsize, b.value-(b.data.(*LSym)).Value)
+			adddwarfrel(arangessec, b.data.(*LSym), sectionstart, Thearch.Ptrsize, b.value-(b.data.(*LSym)).Value, 0)
 		} else {
 			addrput(b.value)
 		}
@@ -2069,6 +2139,13 @@ func Dwarfemitdebugsections() {
 		return
 	}
 
+	adjbuf = false
+	if Isgoff {
+		writeToBuffer = true
+	} else {
+		writeToBuffer = false
+	}
+
 	if Linkmode == LinkExternal {
 		if !Iself && HEADTYPE != obj.Hdarwin {
 			return
@@ -2128,6 +2205,7 @@ func Dwarfemitdebugsections() {
 	align(abbrevsize)
 	writelines()
 	align(linesize)
+
 	writeframes()
 	align(framesize)
 
@@ -2156,6 +2234,10 @@ func Dwarfemitdebugsections() {
 			fmt.Fprintf(&Bso, "%5.2f dwarf pass 2.\n", obj.Cputime())
 		}
 		Cseek(infoo)
+
+		// reset output buffer
+		outbuf = nil
+
 		writeinfo()
 		if fwdcount > 0 {
 			Exitf("dwarf: unresolved references after first dwarf info pass")
@@ -2167,23 +2249,33 @@ func Dwarfemitdebugsections() {
 	}
 
 	infosize = infoe - infoo
-	align(infosize)
 
+	dwarfaddzOSSection(".debug_info", infosize)
+
+	align(infosize)
 	pubnameso = writepub(ispubname)
 	pubnamessize = Cpos() - pubnameso
 	align(pubnamessize)
+
+	dwarfaddzOSSection(".debug_pubnames", pubnamessize)
 
 	pubtypeso = writepub(ispubtype)
 	pubtypessize = Cpos() - pubtypeso
 	align(pubtypessize)
 
+	dwarfaddzOSSection(".debug_pubtypes", pubtypessize)
+
 	arangeso = writearanges()
 	arangessize = Cpos() - arangeso
 	align(arangessize)
 
-	gdbscripto = writegdbscript()
-	gdbscriptsize = Cpos() - gdbscripto
-	align(gdbscriptsize)
+	dwarfaddzOSSection(".debug_aranges", arangessize)
+
+	if !Isgoff {
+		gdbscripto = writegdbscript()
+		gdbscriptsize = Cpos() - gdbscripto
+		align(gdbscriptsize)
+	}
 
 	for Cpos()&7 != 0 {
 		Cput(0)
@@ -2191,6 +2283,8 @@ func Dwarfemitdebugsections() {
 	if HEADTYPE != obj.Hdarwin {
 		dwarfemitreloc()
 	}
+
+	writeToBuffer = false
 }
 
 func dwarfemitreloc() {
@@ -2567,4 +2661,19 @@ func dwarfaddpeheaders() {
 	newPEDWARFSection(".debug_pubtypes", pubtypessize)
 	newPEDWARFSection(".debug_aranges", arangessize)
 	newPEDWARFSection(".debug_gdb_scripts", gdbscriptsize)
+}
+
+/*
+ * z/OS
+ */
+func dwarfaddzOSSection(name string, size int64) {
+	if Debug['w'] != 0 { // disable dwarf
+		return
+	}
+
+	if writeToBuffer && Isgoff {
+		newzOSDWARFSection(name, size, outbuf)
+		// reset buffer
+		outbuf = nil
+	}
 }

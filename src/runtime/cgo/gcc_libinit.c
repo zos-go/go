@@ -1,11 +1,15 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 // +build cgo
-// +build darwin dragonfly freebsd linux netbsd solaris
+// +build darwin dragonfly freebsd linux netbsd solaris zos
 // +build !ppc64,!ppc64le
 
+// chwan -
+// HACK - this macro is required for xlc but not necessary for xlcdev
+#define _UNIX03_THREADS
+// HACK end
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009-2016 The Go Authors.  All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -190,6 +190,7 @@ var (
 	Thestring          string
 	Thelinkarch        *LinkArch
 	outfile            string
+	infile             string
 	dynexp             []*LSym
 	dynlib             []string
 	ldflag             []string
@@ -372,6 +373,29 @@ func mayberemoveoutfile() {
 	os.Remove(outfile)
 }
 
+func copyfile(src string, dst string) {
+
+	perm := os.FileMode(0666)
+	sf, err := os.Open(src)
+	if err != nil {
+		Diag("Fail to open source file  %s: %v ", src, dst, err)
+	}
+	defer sf.Close()
+
+	df, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		Diag("Fail to open destination file  %s: %v ", src, dst, err)
+		return
+	}
+
+	_, err = io.Copy(df, sf)
+	df.Close()
+	if err != nil {
+		Diag("Fail to copy %s to %s: %v ", src, dst, err)
+	}
+	return
+}
+
 func libinit() {
 	Funcalign = Thearch.Funcalign
 	mywhatsys() // get goroot, goarch, goos
@@ -530,8 +554,8 @@ func loadlib() {
 			Linkmode = LinkInternal
 		}
 
-		// Force external linking for android.
-		if goos == "android" {
+		// Force external linking for android and zos.
+		if goos == "android" || goos == "zos" {
 			Linkmode = LinkExternal
 		}
 
@@ -562,7 +586,8 @@ func loadlib() {
 		Linkmode = LinkExternal
 	}
 
-	if Linkmode == LinkExternal && !iscgo {
+	//Annita: Disable the load of cgo for zos temporarily
+	if Linkmode == LinkExternal && !iscgo && goos != "zos" {
 		// This indicates a user requested -linkmode=external.
 		// The startup code uses an import of runtime/cgo to decide
 		// whether to initialize the TLS.  So give it one.  This could
@@ -675,7 +700,12 @@ func loadlib() {
 		if any {
 			if libgccfile == "" {
 				if extld == "" {
-					extld = "gcc"
+					if obj.Getgoos() == "zos" {
+						// TODO: should change to clang in the future
+						extld = "xlc"
+					} else {
+						extld = "gcc"
+					}
 				}
 				args := hostlinkArchArgs()
 				args = append(args, "--print-libgcc-file-name")
@@ -945,8 +975,11 @@ func hostlinksetup() {
 	Debug['s'] = 0
 
 	// create temporary directory and arrange cleanup
+	var dir string
+	var err error
+
 	if tmpdir == "" {
-		dir, err := ioutil.TempDir("", "go-link-")
+		dir, err = ioutil.TempDir("", "go-link-")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -959,7 +992,6 @@ func hostlinksetup() {
 	mayberemoveoutfile()
 
 	p := fmt.Sprintf("%s/go.o", tmpdir)
-	var err error
 	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0775)
 	if err != nil {
 		Exitf("cannot create %s: %v", p, err)
@@ -1043,7 +1075,18 @@ func hostlink() {
 		return
 	}
 
-	if extld == "" {
+	// zOS cross-compiler doesn't invoke the external linker
+	// It generates goff object file and we copy it over to outfile location
+	if goos == "zos" && runtime.GOOS != "zos" {
+		p := fmt.Sprintf("%s/go.o", tmpdir)
+		copyfile(p, outfile)
+		return
+	}
+
+	if goos == "zos" {
+		// TODO: should change to clang in the future
+		extld = "xlc"
+	} else if extld == "" {
 		extld = "gcc"
 	}
 
@@ -1051,10 +1094,12 @@ func hostlink() {
 	argv = append(argv, extld)
 	argv = append(argv, hostlinkArchArgs()...)
 
-	if Debug['s'] == 0 && debug_s == 0 {
-		argv = append(argv, "-gdwarf-2")
-	} else {
-		argv = append(argv, "-s")
+	if goos != "zos" {
+		if Debug['s'] == 0 && debug_s == 0 {
+			argv = append(argv, "-gdwarf-2")
+		} else {
+			argv = append(argv, "-s")
+		}
 	}
 
 	if HEADTYPE == obj.Hdarwin {
@@ -1069,6 +1114,11 @@ func hostlink() {
 		} else {
 			argv = append(argv, "-mconsole")
 		}
+	}
+
+	if goos == "zos" {
+		argv = append(argv, "-q64")
+		argv = append(argv, "-Wl,reus=none ")
 	}
 
 	switch Buildmode {
@@ -1098,14 +1148,14 @@ func hostlink() {
 		argv = append(argv, "-shared")
 	}
 
-	if Iself && DynlinkingGo() {
+	if Iself && goos != "zos" && DynlinkingGo() {
 		// We force all symbol resolution to be done at program startup
 		// because lazy PLT resolution can use large amounts of stack at
 		// times we cannot allow it to do so.
 		argv = append(argv, "-Wl,-znow")
 	}
 
-	if Iself && len(buildinfo) > 0 {
+	if Iself && goos != "zos" && len(buildinfo) > 0 {
 		argv = append(argv, fmt.Sprintf("-Wl,--build-id=0x%x", buildinfo))
 	}
 
@@ -1127,7 +1177,7 @@ func hostlink() {
 	}
 
 	// Force global symbols to be exported for dlopen, etc.
-	if Iself {
+	if Iself && goos != "zos" {
 		argv = append(argv, "-rdynamic")
 	}
 
@@ -1277,6 +1327,12 @@ func ldobj(f *obj.Biobuf, pkg string, length int64, pn string, file string, when
 
 	if c1 == 0x4c && c2 == 0x01 || c1 == 0x64 && c2 == 0x86 {
 		return ldhostobj(ldpe, f, pkg, length, pn, file)
+	}
+
+	// chwan -
+	// z/OS GOFF
+	if goos == "zos" && c1 == 0x03 && c2 == 0xf0 && c3 == 0x00 {
+		return ldhostobj(ldgoff, f, pkg, length, pn, file)
 	}
 
 	/* check the header */
@@ -1829,20 +1885,30 @@ func stkprint(ch *Chain, limit int) {
 }
 
 func Cflush() {
+	if writeToBuffer {
+		return
+	}
 	if err := coutbuf.Writer.Flush(); err != nil {
 		Exitf("flushing %s: %v", coutbuf.f.Name(), err)
 	}
 }
 
 func Cpos() int64 {
-	off, err := coutbuf.f.Seek(0, 1)
-	if err != nil {
-		Exitf("seeking in output [0, 1]: %v", err)
+	if writeToBuffer {
+		return int64(len(outbuf))
+	} else {
+		off, err := coutbuf.f.Seek(0, 1)
+		if err != nil {
+			Exitf("seeking in output [0, 1]: %v", err)
+		}
+		return off + int64(coutbuf.Buffered())
 	}
-	return off + int64(coutbuf.Buffered())
 }
 
 func Cseek(p int64) {
+	if writeToBuffer {
+		return
+	}
 	Cflush()
 	if _, err := coutbuf.f.Seek(p, 0); err != nil {
 		Exitf("seeking in output [0, 1]: %v", err)
@@ -1850,11 +1916,19 @@ func Cseek(p int64) {
 }
 
 func Cwrite(p []byte) {
-	coutbuf.Write(p)
+	if writeToBuffer {
+		outbuf = append(outbuf, p...)
+	} else {
+		coutbuf.Write(p)
+	}
 }
 
 func Cput(c uint8) {
-	coutbuf.WriteByte(c)
+	if writeToBuffer {
+		outbuf = append(outbuf, c)
+	} else {
+		coutbuf.WriteByte(c)
+	}
 }
 
 func usage() {
@@ -2178,4 +2252,13 @@ func Rnd(v int64, r int64) int64 {
 	}
 	v -= c
 	return v
+}
+
+// chwan - This is just a nop function that fits in the code framework.
+//         Since this function is only called when Linkmode is LinkInternal
+//         which should never be the case on z/OS.
+//         So instead of creating a new file such as ldgoff.go, I just add
+//         the function here.
+func ldgoff(f *obj.Biobuf, pkg string, length int64, pn string) {
+	return
 }

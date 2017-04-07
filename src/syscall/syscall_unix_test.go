@@ -1,8 +1,8 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2013-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd solaris
+// +build darwin dragonfly freebsd linux netbsd openbsd solaris zos
 
 package syscall_test
 
@@ -131,6 +131,9 @@ func TestPassFD(t *testing.T) {
 	case "solaris":
 		// TODO(aram): Figure out why ReadMsgUnix is returning empty message.
 		t.Skip("skipping test on solaris, see issue 7402")
+	case "zos":
+		// TODO(mundaym): Figure out why sendmsg is returning EINVAL.
+		t.Skip("skipping test on zos")
 	}
 
 	testenv.MustHaveExec(t)

@@ -6,6 +6,14 @@
 #include "go_tls.h"
 #include "funcdata.h"
 #include "textflag.h"
+#ifdef GOOS_zos
+#define PSALAA            1208(R0)
+#define LCA64(x)            88(x)
+#define SAVSTACK_ASYNC(x)  336(x)
+#define SS_LE(x)             0(x)
+#define SS_GO(x)             8(x)
+#define LE_NOP BYTE $0x07; BYTE $0x00;
+#endif
 
 // Indicate the status of vector facility
 // -1: 	init value
@@ -66,8 +74,18 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	MOVD	R15, (g_stack+stack_hi)(g)
 
 	// if there is a _cgo_init, call it using the gcc ABI.
+	// chwan -
+	// This is for calling
+	//     x_cgo_init(G *g, void (*setg)(void*), void **tlsbase)
+	// where _cgo_init = &x_cgo_init.
+	// On z/OS _cgo_init should point to the function descriptor for
+	// x_cgo_init.
+	// i.e. LARL R11,_cgo_init(SB) instead of LGRL R11,_cgo_init(SB)
+	// And we need to follow the XPLINK argument passing convention
+	// i.e. R1 = *g, R2 = *setg and R3 = **tlsbase
 	MOVD	_cgo_init(SB), R11
 	CMPBEQ	R11, $0, nocgo
+//#ifndef GOOS_zos
 	MOVW	AR0, R4			// (AR0 << 32 | AR1) is the TLS base pointer; MOVD is translated to EAR
 	SLD	$32, R4, R4
 	MOVW	AR1, R4			// arg 2: TLS base pointer
@@ -82,6 +100,26 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	BL	R11			// this call clobbers volatile registers according to Linux ABI (R0-R5, R14)
 	MOVD	R9, R15			// restore stack
 	XOR	R0, R0			// zero R0
+// chwan - The following was just an attempt
+//#else
+	// Get the LCA pointer
+//	MOVW    PSALAA, R8
+//	MOVD    LCA64(R8), R8
+	// Get XPLINK stack pointer
+//	MOVD    SAVSTACK_ASYNC(R8),R9
+//	MOVD    SS_LE(R9),R4
+//	MOVD    $0,SS_LE(R9)
+//	MOVD    R15,SS_GO(R9)
+//	MOVW    AR0, R3
+//	SLD     $32, R3, R3
+//	MOVW	AR1, R3			// arg 2: TLS base pointer
+//	MOVD	$setg_gcc<>(SB), R2 	// arg 1: setg
+//	MOVD	g, R1			// arg 0: G
+//	LMG 	0(R11), R5, R6
+//	BL      R7, R6
+//	LE_NOP
+//	XOR     R0, R0      // Restore R0 to $0.
+//#endif
 
 nocgo:
 	// update stackguard after _cgo_init
@@ -129,6 +167,30 @@ TEXT runtime·breakpoint(SB),NOSPLIT|NOFRAME,$0-0
 
 TEXT runtime·asminit(SB),NOSPLIT|NOFRAME,$0-0
 	RET
+
+// chwan -
+// Both _cgo_load_g and _cgo_reginit need to be XPLINK for zos
+// Unless we can do what runtime.load_g and runtime.reginit in
+// crosscall_s390x directly, i.e. not calling these two functions.
+TEXT _cgo_load_g(SB),NOSPLIT|NOFRAME,$0-0
+        // crosscall_s390x and crosscall2 need to reginit, but can't
+        // get at the 'runtime.load_g' symbol.
+        BR      runtime·load_g(SB)
+
+TEXT _cgo_reginit(SB),NOSPLIT|NOFRAME,$0-0
+        // crosscall_s390x and crosscall2 need to reginit, but can't
+        // get at the 'runtime.reginit' symbol.
+        BR      runtime·reginit(SB)
+
+TEXT runtime·reginit(SB),NOSPLIT|NOFRAME,$0-0
+        // set R0 to zero, it's expected by the toolchain
+        XOR R0, R0
+        // initialize essential FP registers
+        FMOVD   $4503601774854144.0, F11
+        FMOVD   $1.0, F13
+        FSUB    F13, F13, F12
+        FADD    F13, F13, F14
+        RET
 
 /*
  *  go-routine
@@ -494,6 +556,7 @@ TEXT gosave<>(SB),NOSPLIT|NOFRAME,$0
 // Call fn(arg) on the scheduler stack,
 // aligned appropriately for the gcc ABI.
 // See cgocall.go for more details.
+#ifndef GOOS_zos
 TEXT ·asmcgocall(SB),NOSPLIT,$0-20
 	// R2 = argc; R3 = argv; R11 = temp; R13 = g; R15 = stack pointer
 	// C TLS base pointer in AR0:AR1
@@ -540,6 +603,27 @@ g0:
 
 	MOVW	R2, ret+16(FP)
 	RET
+#else
+TEXT ·asmcgocall(SB),NOSPLIT|NOFRAME,$0-28
+	MOVD	fn+0(FP), R6
+	MOVD	arg+8(FP), R1
+	// Get the LCA pointer
+	MOVW    PSALAA, R8
+	MOVD    LCA64(R8), R8
+	// Get XPLINK stack pointer
+	MOVD    SAVSTACK_ASYNC(R8),R9
+	MOVD    SS_LE(R9),R4
+	MOVD    $0,SS_LE(R9)
+	MOVD    R15,SS_GO(R9)
+	// Load from the function descriptor (what fn points at)
+	LMG 	0(R6), R5, R6
+	BL      R7, R6
+	LE_NOP
+	XOR     R0, R0      // Restore R0 to $0.
+	MOVD    R4,SS_LE(R9)
+	MOVD	R3, ret+16(FP)
+	RET
+#endif
 
 // cgocallback(void (*fn)(void*), void *frame, uintptr framesize)
 // Turn the fn into a Go func (by taking its address) and call

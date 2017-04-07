@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors. All rights reserved.
+// Copyright 2014-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -89,10 +89,13 @@ func TestNM(t *testing.T) {
 		}
 	}
 
-	cmd := exec.Command(testnmpath, os.Args[0])
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("go tool nm %v: %v\n%s", os.Args[0], err, string(out))
+	// nm can't recognize the GOFF executable from zos, so ignore it
+	if runtime.GOOS != "zos" {
+		cmd := exec.Command(testnmpath, os.Args[0])
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("go tool nm %v: %v\n%s", os.Args[0], err, string(out))
+		}
+		checkSymbols(t, out)
 	}
-	checkSymbols(t, out)
 }

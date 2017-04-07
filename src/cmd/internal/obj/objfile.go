@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -203,6 +203,32 @@ func Flushplist(ctxt *Link) {
 			}
 
 			if p.As == ADATA {
+				// chwan -
+				// For z/OS this represents the symbol (p.From.Sym) that represents the data that is a relocation to
+				// the called C function (p.To.Sym)
+				// The p.From.Offset will be entered as r.Off and the p.From3.Offset will be used as the size of this
+				// relocatable. So we need to make sure the size is 16 - a 64-bit XPLINK function descriptor consists
+				// of a 64-bit ADA pointer and a 64-bit function pointer.
+				// chwan - I have no idea where the p.From3 was initially established
+				if Getgoos() == "zos" && p.From.Sym != nil && p.To.Sym != nil {
+					var isCRef bool
+					isCRef = false
+					if strings.Contains(p.From.Sym.Name, "_cgo_") && strings.Contains(p.From.Sym.Name, "_Cfunc_") &&
+						strings.HasPrefix(p.To.Sym.Name, "_cgo_") && strings.Contains(p.To.Sym.Name, "_Cfunc_") {
+						isCRef = true
+					} else if (p.From.Sym.Name == "_cgo_thread_start" && p.To.Sym.Name == "x_cgo_thread_start") ||
+						(p.From.Sym.Name == "_cgo_sys_thread_create" && p.To.Sym.Name == "x_cgo_sys_thread_create") ||
+						(p.From.Sym.Name == "_cgo_notify_runtime_init_done" && p.To.Sym.Name == "x_cgo_notify_runtime_init_done") ||
+						(p.From.Sym.Name == "_cgo_init" && p.To.Sym.Name == "x_cgo_init") ||
+						(p.From.Sym.Name == "_cgo_malloc" && p.To.Sym.Name == "x_cgo_malloc") ||
+						(p.From.Sym.Name == "_cgo_free" && p.To.Sym.Name == "x_cgo_free") {
+						isCRef = true
+					}
+					if isCRef && p.From3 != nil && p.From3.Offset < 16 {
+						p.From3.Offset = 16
+						p.From.Sym.Size = 16
+					}
+				}
 				savedata(ctxt, p.From.Sym, p, "<input>")
 				continue
 			}

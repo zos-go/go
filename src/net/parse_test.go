@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors. All rights reserved.
+// Copyright 2009-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,8 +6,10 @@ package net
 
 import (
 	"bufio"
+	"internal/ebcdic"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -25,7 +27,12 @@ func TestReadLine(t *testing.T) {
 	}
 	defer fd.Close()
 	br := bufio.NewReader(fd)
-
+	if runtime.GOOS == "zos" {
+		cvtStr := make([]byte, br.Buffered())
+		br.Read(cvtStr)
+		str, _ := ebcdic.Decode(cvtStr)
+		br = bufio.NewReader(strings.NewReader(string(str)))
+	}
 	file, err := open(filename)
 	if file == nil {
 		t.Fatal(err)

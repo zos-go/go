@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors. All rights reserved.
+// Copyright 2013-2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -112,7 +112,7 @@ func afterTest(t testing.TB) {
 		").noteClientGone(":                            "a closenotifier sender",
 	}
 	var stacks string
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 4 || ((runtime.GOOS == "zos") && (i < 4*4)); i++ { // Add some extra time for zOS
 		bad = ""
 		stacks = strings.Join(interestingGoroutines(), "\n\n")
 		for substr, what := range badSubstring {

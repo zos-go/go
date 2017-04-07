@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009-2016 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -598,6 +598,9 @@ func (f *File) applyRelocations(dst []byte, rels []byte) error {
 		return f.applyRelocationsMIPS64(dst, rels)
 	case f.Class == ELFCLASS64 && f.Machine == EM_S390:
 		return f.applyRelocationss390x(dst, rels)
+	// chwan - CDA on z/OS uses ELFCLASS32 for 64-bit
+	case f.Class == ELFCLASS32 && f.Machine == EM_S390:
+		return f.applyRelocationss390x32(dst, rels)
 	default:
 		return errors.New("applyRelocations: not implemented")
 	}
@@ -956,6 +959,51 @@ func (f *File) applyRelocationss390x(dst []byte, rels []byte) error {
 			}
 			val := uint32(sym.Value) + uint32(rela.Addend)
 			f.ByteOrder.PutUint32(dst[rela.Off:rela.Off+4], val)
+		}
+	}
+
+	return nil
+}
+
+// chwan - Handle dwarf from CDA on z/OS (i.e. xlcdev)
+func (f *File) applyRelocationss390x32(dst []byte, rels []byte) error {
+	// 8 is the size of Rel32.
+	if len(rels)%8 != 0 {
+		return errors.New("length of relocation section is not a multiple of 8")
+	}
+
+	symbols, _, err := f.getSymbols(SHT_SYMTAB)
+	if err != nil {
+		return err
+	}
+
+	b := bytes.NewReader(rels)
+	var rel Rel32
+
+	for b.Len() > 0 {
+		binary.Read(b, f.ByteOrder, &rel)
+		symNo := rel.Info >> 8
+		t := R_390(rel.Info & 0xff)
+
+		if symNo == 0 || symNo > uint32(len(symbols)) {
+			continue
+		}
+		sym := &symbols[symNo-1]
+		switch SymType(sym.Info & 0xf) {
+		case STT_SECTION, STT_NOTYPE:
+			break
+		default:
+			continue
+		}
+
+		switch t {
+		case R_390_32:
+			if rel.Off+4 >= uint32(len(dst)) {
+				continue
+			}
+			val := f.ByteOrder.Uint32(dst[rel.Off : rel.Off+4])
+			val += uint32(sym.Value)
+			f.ByteOrder.PutUint32(dst[rel.Off:rel.Off+4], val)
 		}
 	}
 
