@@ -216,14 +216,14 @@ func Main() {
 	var flag_shared int
 	var flag_dynlink bool
 	switch Thearch.Thechar {
-	case '5', '6', '7', '8', '9':
+	case '5', '6', '7', '8', '9', 'z':
 		obj.Flagcount("shared", "generate code that can be linked into a shared library", &flag_shared)
 	}
 	if Thearch.Thechar == '6' {
 		obj.Flagcount("largemodel", "generate code that assumes a large memory model", &flag_largemodel)
 	}
 	switch Thearch.Thechar {
-	case '5', '6', '7', '8', '9':
+	case '5', '6', '7', '8', '9', 'z':
 		flag.BoolVar(&flag_dynlink, "dynlink", false, "support references to Go symbols defined in other shared libraries")
 	}
 	obj.Flagstr("cpuprofile", "write cpu profile to `file`", &cpuprofile)

@@ -273,3 +273,128 @@ pkg text/template, method (ExecError) Error() string
 pkg text/template, type ExecError struct
 pkg text/template, type ExecError struct, Err error
 pkg text/template, type ExecError struct, Name string
+pkg debug/elf, const R_390_12 = 2
+pkg debug/elf, const R_390_12 R_390
+pkg debug/elf, const R_390_16 = 3
+pkg debug/elf, const R_390_16 R_390
+pkg debug/elf, const R_390_20 = 57
+pkg debug/elf, const R_390_20 R_390
+pkg debug/elf, const R_390_32 = 4
+pkg debug/elf, const R_390_32 R_390
+pkg debug/elf, const R_390_64 = 22
+pkg debug/elf, const R_390_64 R_390
+pkg debug/elf, const R_390_8 = 1
+pkg debug/elf, const R_390_8 R_390
+pkg debug/elf, const R_390_COPY = 9
+pkg debug/elf, const R_390_COPY R_390
+pkg debug/elf, const R_390_GLOB_DAT = 10
+pkg debug/elf, const R_390_GLOB_DAT R_390
+pkg debug/elf, const R_390_GOT12 = 6
+pkg debug/elf, const R_390_GOT12 R_390
+pkg debug/elf, const R_390_GOT16 = 15
+pkg debug/elf, const R_390_GOT16 R_390
+pkg debug/elf, const R_390_GOT20 = 58
+pkg debug/elf, const R_390_GOT20 R_390
+pkg debug/elf, const R_390_GOT32 = 7
+pkg debug/elf, const R_390_GOT32 R_390
+pkg debug/elf, const R_390_GOT64 = 24
+pkg debug/elf, const R_390_GOT64 R_390
+pkg debug/elf, const R_390_GOTENT = 26
+pkg debug/elf, const R_390_GOTENT R_390
+pkg debug/elf, const R_390_GOTOFF = 13
+pkg debug/elf, const R_390_GOTOFF R_390
+pkg debug/elf, const R_390_GOTOFF16 = 27
+pkg debug/elf, const R_390_GOTOFF16 R_390
+pkg debug/elf, const R_390_GOTOFF64 = 28
+pkg debug/elf, const R_390_GOTOFF64 R_390
+pkg debug/elf, const R_390_GOTPC = 14
+pkg debug/elf, const R_390_GOTPC R_390
+pkg debug/elf, const R_390_GOTPCDBL = 21
+pkg debug/elf, const R_390_GOTPCDBL R_390
+pkg debug/elf, const R_390_GOTPLT12 = 29
+pkg debug/elf, const R_390_GOTPLT12 R_390
+pkg debug/elf, const R_390_GOTPLT16 = 30
+pkg debug/elf, const R_390_GOTPLT16 R_390
+pkg debug/elf, const R_390_GOTPLT20 = 59
+pkg debug/elf, const R_390_GOTPLT20 R_390
+pkg debug/elf, const R_390_GOTPLT32 = 31
+pkg debug/elf, const R_390_GOTPLT32 R_390
+pkg debug/elf, const R_390_GOTPLT64 = 32
+pkg debug/elf, const R_390_GOTPLT64 R_390
+pkg debug/elf, const R_390_GOTPLTENT = 33
+pkg debug/elf, const R_390_GOTPLTENT R_390
+pkg debug/elf, const R_390_GOTPLTOFF16 = 34
+pkg debug/elf, const R_390_GOTPLTOFF16 R_390
+pkg debug/elf, const R_390_GOTPLTOFF32 = 35
+pkg debug/elf, const R_390_GOTPLTOFF32 R_390
+pkg debug/elf, const R_390_GOTPLTOFF64 = 36
+pkg debug/elf, const R_390_GOTPLTOFF64 R_390
+pkg debug/elf, const R_390_JMP_SLOT = 11
+pkg debug/elf, const R_390_JMP_SLOT R_390
+pkg debug/elf, const R_390_NONE = 0
+pkg debug/elf, const R_390_NONE R_390
+pkg debug/elf, const R_390_PC16 = 16
+pkg debug/elf, const R_390_PC16 R_390
+pkg debug/elf, const R_390_PC16DBL = 17
+pkg debug/elf, const R_390_PC16DBL R_390
+pkg debug/elf, const R_390_PC32 = 5
+pkg debug/elf, const R_390_PC32 R_390
+pkg debug/elf, const R_390_PC32DBL = 19
+pkg debug/elf, const R_390_PC32DBL R_390
+pkg debug/elf, const R_390_PC64 = 23
+pkg debug/elf, const R_390_PC64 R_390
+pkg debug/elf, const R_390_PLT16DBL = 18
+pkg debug/elf, const R_390_PLT16DBL R_390
+pkg debug/elf, const R_390_PLT32 = 8
+pkg debug/elf, const R_390_PLT32 R_390
+pkg debug/elf, const R_390_PLT32DBL = 20
+pkg debug/elf, const R_390_PLT32DBL R_390
+pkg debug/elf, const R_390_PLT64 = 25
+pkg debug/elf, const R_390_PLT64 R_390
+pkg debug/elf, const R_390_RELATIVE = 12
+pkg debug/elf, const R_390_RELATIVE R_390
+pkg debug/elf, const R_390_TLS_DTPMOD = 54
+pkg debug/elf, const R_390_TLS_DTPMOD R_390
+pkg debug/elf, const R_390_TLS_DTPOFF = 55
+pkg debug/elf, const R_390_TLS_DTPOFF R_390
+pkg debug/elf, const R_390_TLS_GD32 = 40
+pkg debug/elf, const R_390_TLS_GD32 R_390
+pkg debug/elf, const R_390_TLS_GD64 = 41
+pkg debug/elf, const R_390_TLS_GD64 R_390
+pkg debug/elf, const R_390_TLS_GDCALL = 38
+pkg debug/elf, const R_390_TLS_GDCALL R_390
+pkg debug/elf, const R_390_TLS_GOTIE12 = 42
+pkg debug/elf, const R_390_TLS_GOTIE12 R_390
+pkg debug/elf, const R_390_TLS_GOTIE20 = 60
+pkg debug/elf, const R_390_TLS_GOTIE20 R_390
+pkg debug/elf, const R_390_TLS_GOTIE32 = 43
+pkg debug/elf, const R_390_TLS_GOTIE32 R_390
+pkg debug/elf, const R_390_TLS_GOTIE64 = 44
+pkg debug/elf, const R_390_TLS_GOTIE64 R_390
+pkg debug/elf, const R_390_TLS_IE32 = 47
+pkg debug/elf, const R_390_TLS_IE32 R_390
+pkg debug/elf, const R_390_TLS_IE64 = 48
+pkg debug/elf, const R_390_TLS_IE64 R_390
+pkg debug/elf, const R_390_TLS_IEENT = 49
+pkg debug/elf, const R_390_TLS_IEENT R_390
+pkg debug/elf, const R_390_TLS_LDCALL = 39
+pkg debug/elf, const R_390_TLS_LDCALL R_390
+pkg debug/elf, const R_390_TLS_LDM32 = 45
+pkg debug/elf, const R_390_TLS_LDM32 R_390
+pkg debug/elf, const R_390_TLS_LDM64 = 46
+pkg debug/elf, const R_390_TLS_LDM64 R_390
+pkg debug/elf, const R_390_TLS_LDO32 = 52
+pkg debug/elf, const R_390_TLS_LDO32 R_390
+pkg debug/elf, const R_390_TLS_LDO64 = 53
+pkg debug/elf, const R_390_TLS_LDO64 R_390
+pkg debug/elf, const R_390_TLS_LE32 = 50
+pkg debug/elf, const R_390_TLS_LE32 R_390
+pkg debug/elf, const R_390_TLS_LE64 = 51
+pkg debug/elf, const R_390_TLS_LE64 R_390
+pkg debug/elf, const R_390_TLS_LOAD = 37
+pkg debug/elf, const R_390_TLS_LOAD R_390
+pkg debug/elf, const R_390_TLS_TPOFF = 56
+pkg debug/elf, const R_390_TLS_TPOFF R_390
+pkg debug/elf, method (R_390) GoString() string
+pkg debug/elf, method (R_390) String() string
+pkg debug/elf, type R_390 int

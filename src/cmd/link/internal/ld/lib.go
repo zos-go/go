@@ -329,7 +329,7 @@ func (mode *BuildMode) Set(s string) error {
 		switch goos {
 		case "linux":
 			switch goarch {
-			case "386", "amd64", "arm", "arm64", "ppc64le":
+			case "386", "amd64", "arm", "arm64", "ppc64le", "s390x":
 			default:
 				return badmode()
 			}

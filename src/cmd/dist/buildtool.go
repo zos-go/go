@@ -37,6 +37,7 @@ var bootstrapDirs = []string{
 	"compile/internal/mips64",
 	"compile/internal/ppc64",
 	"compile/internal/x86",
+	"compile/internal/s390x",
 	"internal/gcprog",
 	"internal/obj",
 	"internal/obj/arm",
@@ -44,6 +45,7 @@ var bootstrapDirs = []string{
 	"internal/obj/mips",
 	"internal/obj/ppc64",
 	"internal/obj/x86",
+	"internal/obj/s390x",
 	"link",
 	"link/internal/amd64",
 	"link/internal/arm",
@@ -52,6 +54,7 @@ var bootstrapDirs = []string{
 	"link/internal/mips64",
 	"link/internal/ppc64",
 	"link/internal/x86",
+	"link/internal/s390x",
 }
 
 func bootstrapBuildTools() {

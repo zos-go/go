@@ -247,7 +247,7 @@ func cgen_wb(n, res *Node, wb bool) {
 		return
 	}
 
-	if (Ctxt.Arch.Thechar == '6' || Ctxt.Arch.Thechar == '8') && n.Addable {
+	if (Ctxt.Arch.Thechar == '6' || Ctxt.Arch.Thechar == '8' || Ctxt.Arch.Thechar == 'z') && n.Addable {
 		Thearch.Gmove(n, res)
 		return
 	}
@@ -1832,7 +1832,7 @@ func bgenx(n, res *Node, wantTrue bool, likely int, to *obj.Prog) {
 			// but they don't support direct generation of a bool value yet.
 			// We can fix that as we go.
 			switch Ctxt.Arch.Thechar {
-			case '0', '5', '7', '9':
+			case '0', '5', '7', '9', 'z':
 				Fatalf("genval 0g, 5g, 7g, 9g ONAMES not fully implemented")
 			}
 			Cgen(n, res)
@@ -1842,7 +1842,7 @@ func bgenx(n, res *Node, wantTrue bool, likely int, to *obj.Prog) {
 			return
 		}
 
-		if n.Addable && Ctxt.Arch.Thechar != '0' && Ctxt.Arch.Thechar != '5' && Ctxt.Arch.Thechar != '7' && Ctxt.Arch.Thechar != '9' {
+		if n.Addable && Ctxt.Arch.Thechar != '0' && Ctxt.Arch.Thechar != '5' && Ctxt.Arch.Thechar != '7' && Ctxt.Arch.Thechar != '9' && Ctxt.Arch.Thechar != 'z' {
 			// no need for a temporary
 			bgenNonZero(n, nil, wantTrue, likely, to)
 			return
@@ -2640,7 +2640,7 @@ func cgen_div(op Op, nl *Node, nr *Node, res *Node) {
 	// in peep and optoas in order to enable this.
 	// TODO(rsc): ppc64 needs to support the relevant instructions
 	// in peep and optoas in order to enable this.
-	if nr.Op != OLITERAL || Ctxt.Arch.Thechar == '0' || Ctxt.Arch.Thechar == '7' || Ctxt.Arch.Thechar == '9' {
+	if nr.Op != OLITERAL || Ctxt.Arch.Thechar == '0' || Ctxt.Arch.Thechar == '7' || Ctxt.Arch.Thechar == '9' || Ctxt.Arch.Thechar == 'z' {
 		goto longdiv
 	}
 	w = int(nl.Type.Width * 8)

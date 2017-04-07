@@ -626,6 +626,11 @@ func TestLookupPort(t *testing.T) {
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
 
+	switch runtime.GOARCH {
+	case "s390x":
+		t.Skipf("services not all known on %s", runtime.GOARCH)
+	}
+
 	for _, tt := range lookupPortTests {
 		if port, err := LookupPort(tt.network, tt.name); port != tt.port || (err == nil) != tt.ok {
 			t.Errorf("LookupPort(%q, %q) = %d, %v; want %d", tt.network, tt.name, port, err, tt.port)

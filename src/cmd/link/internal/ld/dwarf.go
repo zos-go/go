@@ -1715,7 +1715,7 @@ func writelines() {
  *  Emit .debug_frame
  */
 const (
-	CIERESERVE          = 16
+	CIERESERVE          = 32
 	DATAALIGNMENTFACTOR = -4
 )
 
@@ -1754,7 +1754,6 @@ func writeframes() {
 	uleb128put(int64(Thearch.Dwarfreglr)) // return_address_register
 
 	Cput(DW_CFA_def_cfa)
-
 	uleb128put(int64(Thearch.Dwarfregsp)) // register SP (**ABI-dependent, defined in l.h)
 	if haslinkregister() {
 		uleb128put(int64(0)) // offset
@@ -1762,12 +1761,19 @@ func writeframes() {
 		uleb128put(int64(Thearch.Ptrsize)) // offset
 	}
 
-	Cput(DW_CFA_offset_extended)
-	uleb128put(int64(Thearch.Dwarfreglr)) // return address
 	if haslinkregister() {
-		uleb128put(int64(0) / DATAALIGNMENTFACTOR) // at cfa - 0
+		Cput(DW_CFA_same_value)
+		uleb128put(int64(Thearch.Dwarfreglr))
 	} else {
+		Cput(DW_CFA_offset_extended)
+		uleb128put(int64(Thearch.Dwarfreglr))                     // return address
 		uleb128put(int64(-Thearch.Ptrsize) / DATAALIGNMENTFACTOR) // at cfa - x*4
+	}
+
+	if haslinkregister() {
+		Cput(DW_CFA_val_offset)
+		uleb128put(int64(Thearch.Dwarfregsp))
+		uleb128put(int64(0))
 	}
 
 	// 4 is to exclude the length field.
@@ -1788,7 +1794,7 @@ func writeframes() {
 
 		fdeo := Cpos()
 
-		// Emit a FDE, Section 6.4.1, starting wit a placeholder.
+		// Emit a FDE, Section 6.4.1, starting with a placeholder.
 		Thearch.Lput(0) // length, must be multiple of thearch.ptrsize
 		Thearch.Lput(0) // Pointer to the CIE above, at offset 0
 		addrput(0)      // initial location
@@ -1807,6 +1813,21 @@ func writeframes() {
 			}
 
 			if haslinkregister() {
+				// TODO(bryanpkc): This is imprecise. In general, the instruction
+				// that stores the return address to the stack frame is not the
+				// same one that allocates the frame.
+				if pcsp.value > 0 {
+					// The return address is preserved at (CFA-frame_size)
+					// after a stack frame has been allocated.
+					Cput(DW_CFA_offset_extended_sf)
+					uleb128put(int64(Thearch.Dwarfreglr))
+					sleb128put(-int64(pcsp.value) / DATAALIGNMENTFACTOR)
+				} else {
+					// The return address is restored into the link register
+					// when a stack frame has been de-allocated.
+					Cput(DW_CFA_same_value)
+					uleb128put(int64(Thearch.Dwarfreglr))
+				}
 				putpccfadelta(int64(nextpc)-int64(pcsp.pc), int64(pcsp.value))
 			} else {
 				putpccfadelta(int64(nextpc)-int64(pcsp.pc), int64(Thearch.Ptrsize)+int64(pcsp.value))
@@ -2237,7 +2258,7 @@ func dwarfaddshstrings(shstrtab *LSym) {
 	elfstrdbg[ElfStrGDBScripts] = Addstring(shstrtab, ".debug_gdb_scripts")
 	if Linkmode == LinkExternal {
 		switch Thearch.Thechar {
-		case '0', '6', '7', '9':
+		case '0', '6', '7', '9', 'z':
 			elfstrdbg[ElfStrRelDebugInfo] = Addstring(shstrtab, ".rela.debug_info")
 			elfstrdbg[ElfStrRelDebugAranges] = Addstring(shstrtab, ".rela.debug_aranges")
 			elfstrdbg[ElfStrRelDebugLine] = Addstring(shstrtab, ".rela.debug_line")
@@ -2290,7 +2311,7 @@ func dwarfaddelfsectionsyms() {
 func dwarfaddelfrelocheader(elfstr int, shdata *ElfShdr, off int64, size int64) {
 	sh := newElfShdr(elfstrdbg[elfstr])
 	switch Thearch.Thechar {
-	case '0', '6', '7', '9':
+	case '0', '6', '7', '9', 'z':
 		sh.type_ = SHT_RELA
 	default:
 		sh.type_ = SHT_REL

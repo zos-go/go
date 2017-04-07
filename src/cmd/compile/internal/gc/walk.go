@@ -617,7 +617,7 @@ opswitch:
 
 		if n.Left.Op == ONAME && n.Left.Sym.Name == "Sqrt" && n.Left.Sym.Pkg.Path == "math" {
 			switch Thearch.Thechar {
-			case '5', '6', '7':
+			case '5', '6', '7', 'z':
 				n.Op = OSQRT
 				n.Left = n.List.N
 				n.List = nil
@@ -3306,6 +3306,11 @@ func walkrotate(np **Node) {
 
 	// Constants adding to width?
 	w := int(l.Type.Width * 8)
+
+	if Thearch.Thechar == 'z' && w != 32 && w != 64 {
+		// only supports 32-bit and 64-bit rotates
+		return
+	}
 
 	if Smallintconst(l.Right) && Smallintconst(r.Right) {
 		sl := int(Mpgetfix(l.Right.Val().U.(*Mpint)))

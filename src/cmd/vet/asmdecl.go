@@ -65,6 +65,7 @@ var (
 	asmArchAmd64p32 = asmArch{"amd64p32", 4, 4, 8, false, "SP", false}
 	asmArchPpc64    = asmArch{"ppc64", 8, 8, 8, true, "R1", true}
 	asmArchPpc64LE  = asmArch{"ppc64le", 8, 8, 8, false, "R1", true}
+	asmArchS390x    = asmArch{"s390x", 8, 8, 8, true, "R15", true}
 
 	arches = []*asmArch{
 		&asmArch386,
@@ -74,6 +75,7 @@ var (
 		&asmArchAmd64p32,
 		&asmArchPpc64,
 		&asmArchPpc64LE,
+		&asmArchS390x,
 	}
 )
 

@@ -249,7 +249,7 @@ func addmove(r *Flow, bn int, rn int, f int) {
 	p1.As = int16(Thearch.Optoas(OAS, Types[uint8(v.etype)]))
 
 	// TODO(rsc): Remove special case here.
-	if (Thearch.Thechar == '0' || Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9') && v.etype == TBOOL {
+	if (Thearch.Thechar == '0' || Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9' || Thearch.Thechar == 'z') && v.etype == TBOOL {
 		p1.As = int16(Thearch.Optoas(OAS, Types[TUINT8]))
 	}
 	p1.From.Type = obj.TYPE_REG
@@ -302,7 +302,7 @@ func mkvar(f *Flow, a *obj.Addr) Bits {
 		// TODO(rsc): Remove special case here.
 	case obj.TYPE_ADDR:
 		var bit Bits
-		if Thearch.Thechar == '0' || Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9' {
+		if Thearch.Thechar == '0' || Thearch.Thechar == '5' || Thearch.Thechar == '7' || Thearch.Thechar == '9' || Thearch.Thechar == 'z' {
 			goto memcase
 		}
 		a.Type = obj.TYPE_MEM
@@ -1114,7 +1114,7 @@ func regopt(firstp *obj.Prog) {
 
 		// Currently we never generate three register forms.
 		// If we do, this will need to change.
-		if p.From3Type() != obj.TYPE_NONE {
+		if p.From3Type() != obj.TYPE_NONE && p.From3Type() != obj.TYPE_CONST {
 			Fatalf("regopt not implemented for from3")
 		}
 

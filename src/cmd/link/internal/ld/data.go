@@ -148,6 +148,9 @@ func Addpcrelplus(ctxt *Link, s *LSym, t *LSym, add int64) int64 {
 	r.Add = add
 	r.Type = obj.R_PCREL
 	r.Siz = 4
+	if Thearch.Thechar == 'z' {
+		r.Variant = RV_390_DBL
+	}
 	return i + int64(r.Siz)
 }
 
@@ -364,6 +367,18 @@ func relocsym(s *LSym) {
 			Diag("unreachable sym in relocation: %s %s", s.Name, r.Sym.Name)
 		}
 
+		// TODO(mundaym): Move this conversion somewhere more appropriate.
+		// Ideally the obj relocations would support variants.
+		if Thearch.Thechar == 'z' {
+			switch r.Type {
+			case obj.R_PCRELDBL:
+				r.Type = obj.R_PCREL
+				r.Variant = RV_390_DBL
+			case obj.R_CALL:
+				r.Variant = RV_390_DBL
+			}
+		}
+
 		switch r.Type {
 		default:
 			switch siz {
@@ -454,7 +469,7 @@ func relocsym(s *LSym) {
 
 				o = r.Xadd
 				if Iself {
-					if Thearch.Thechar == '6' {
+					if Thearch.Thechar == '6' || Thearch.Thechar == 'z' {
 						o = 0
 					}
 				} else if HEADTYPE == obj.Hdarwin {
@@ -514,7 +529,7 @@ func relocsym(s *LSym) {
 
 				o = r.Xadd
 				if Iself {
-					if Thearch.Thechar == '6' {
+					if Thearch.Thechar == '6' || Thearch.Thechar == 'z' {
 						o = 0
 					}
 				} else if HEADTYPE == obj.Hdarwin {
@@ -1030,6 +1045,13 @@ func symalign(s *LSym) int32 {
 	if align < s.Align {
 		align = s.Align
 	}
+
+	// TODO(mundaym): Minalign should probably be a new attribute on 'Thearch'
+	if Thearch.Thechar == 'z' && align < 2 {
+		// Relative addressing requires a 2 byte alignment on s390x.
+		align = 2
+	}
+
 	return align
 }
 
@@ -1159,6 +1181,7 @@ func dodata() {
 	for s := datap; s != nil; s = s.Next {
 		if int64(len(s.P)) > s.Size {
 			Diag("%s: initialize bounds (%d < %d)", s.Name, int64(s.Size), len(s.P))
+			s.Size = int64(len(s.P)) // hack to allow linking of asm into go // TODO(WGO)
 		}
 	}
 

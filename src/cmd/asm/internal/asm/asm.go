@@ -381,6 +381,20 @@ func (p *Parser) asmJump(op int, cond string, a []obj.Addr) {
 			prog.Reg = p.getRegister(prog, op, &a[1])
 			break
 		}
+		if p.arch.Thechar == 'z' {
+			// 3-operand jumps.
+			target = &a[2]
+			prog.From = a[0]
+			if a[1].Reg != 0 {
+				// compare two regs; jump.
+				prog.Reg = p.getRegister(prog, op, &a[1])
+			} else {
+				// compare reg with imm; jump.
+				prog.From3 = newAddr(a[1])
+			}
+			break
+		}
+
 		fallthrough
 	default:
 		p.errorf("wrong number of arguments to %s instruction", obj.Aconv(op))
@@ -593,6 +607,15 @@ func (p *Parser) asmInstruction(op int, cond string, a []obj.Addr) {
 				p.errorf("invalid addressing modes for %s instruction", obj.Aconv(op))
 				return
 			}
+		case 'z':
+			if arch.IsS390xWithLength(op) || arch.IsS390xWithIndex(op) {
+				prog.From = a[1]
+				prog.From3 = newAddr(a[0])
+			} else {
+				prog.Reg = p.getRegister(prog, op, &a[1])
+				prog.From = a[0]
+			}
+			prog.To = a[2]
 		default:
 			p.errorf("TODO: implement three-operand instructions for this architecture")
 			return
@@ -625,6 +648,13 @@ func (p *Parser) asmInstruction(op int, cond string, a []obj.Addr) {
 			prog.From = a[0]
 			prog.Reg = p.getRegister(prog, op, &a[1])
 			prog.From3 = newAddr(a[2])
+			prog.To = a[3]
+			break
+		}
+		if p.arch.Thechar == 'z' {
+			prog.From = a[1]
+			prog.Reg = p.getRegister(prog, op, &a[2])
+			prog.From3 = newAddr(a[0])
 			prog.To = a[3]
 			break
 		}

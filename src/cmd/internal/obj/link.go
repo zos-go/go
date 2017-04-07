@@ -521,6 +521,9 @@ const (
 	// R_ADDRPOWER_DS but inserts the offset from the TOC to the address of the the
 	// relocated symbol rather than the symbol's address.
 	R_ADDRPOWER_TOCREL_DS
+
+	// R_PCRELDBL is for S390x (z) 2-byte aligned addresses (e.g. R_390_PLT32DBL)
+	R_PCRELDBL
 )
 
 type Auto struct {
